@@ -8,3 +8,4 @@ description = "The Stackyy-Lang VM/Compiler/Interpreter"
 
 [dependencies]
 clap = { version = "*", features = ["derive"]}
+backtrace = "*"

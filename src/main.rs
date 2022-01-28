@@ -4,6 +4,7 @@ use std::fmt::Arguments;
 use std::fs::OpenOptions;
 use std::io::Read;
 use std::process::exit;
+use backtrace::Backtrace;
 
 use clap::Parser;
 
@@ -19,6 +20,9 @@ pub mod vm;
 fn main() {
     std::panic::set_hook(Box::new( |panic_info| {
         eprintln!("----- Error -----");
+        let current_backtrace = Backtrace::new();
+        eprintln!("Backtrace");
+        eprintln!("{:?}", current_backtrace);
         eprintln!("{:?}", panic_info.message().ok_or_else(|| {}).map_err(|_| "No message provided").unwrap());
         eprintln!("----- Error -----");
     }));
