@@ -151,7 +151,7 @@ impl VM {
             }
             OperationType::Include => {
                 if let Operand::Include(str) = operation.operand.unwrap() {
-                    self.ops.push(str.as_ref().clone())
+                    self.execute(str.as_ref().clone());
                 }
             }
         }
