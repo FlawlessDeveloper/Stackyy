@@ -1,17 +1,19 @@
 use crate::util::{compiler_error, compiler_error_str};
-use crate::util::internals::Internal::{NoOp, Print};
+use crate::util::internals::Internal::{NoOp, Print, PrintLn};
 use crate::util::position::Position;
 use crate::util::token::TokenValue;
 
-static INTERNALS: [&str; 2] = [
+static INTERNALS: [&str; 3] = [
     "noop",
-    "print"
+    "print",
+    "println"
 ];
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Internal {
     NoOp,
     Print,
+    PrintLn,
 }
 
 pub fn to_internal(str: &TokenValue, pos: Position) -> Internal {
@@ -19,7 +21,8 @@ pub fn to_internal(str: &TokenValue, pos: Position) -> Internal {
         if INTERNALS.contains(&str.as_str()) {
             match str.as_str() {
                 "noop" => NoOp,
-                "print" | "puts" | "sysout" => Print,
+                "print" => Print,
+                "println"  => PrintLn,
                 _ => {
                     compiler_error(format!("The internal call {} is not implemented", str), pos);
                     unreachable!()
