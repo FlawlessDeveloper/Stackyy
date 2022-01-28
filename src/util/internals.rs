@@ -1,12 +1,19 @@
 use crate::util::{compiler_error, compiler_error_str};
-use crate::util::internals::Internal::{NoOp, Print, PrintLn};
+use crate::util::internals::Internal::{DbgStack, Drop, DropStack, Dup, DupStack, NoOp, Print, PrintLn, RevStack, Swap};
 use crate::util::position::Position;
 use crate::util::token::TokenValue;
 
-static INTERNALS: [&str; 3] = [
+static INTERNALS: [&str; 10] = [
     "noop",
     "print",
-    "println"
+    "println",
+    "swap",
+    "drop",
+    "dup",
+    "rev_stack",
+    "drop_stack",
+    "dup_stack",
+    "dbg_stack",
 ];
 
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
@@ -14,6 +21,13 @@ pub enum Internal {
     NoOp,
     Print,
     PrintLn,
+    Swap,
+    Drop,
+    Dup,
+    RevStack,
+    DropStack,
+    DupStack,
+    DbgStack,
 }
 
 pub fn to_internal(str: &TokenValue, pos: Position) -> Internal {
@@ -23,6 +37,14 @@ pub fn to_internal(str: &TokenValue, pos: Position) -> Internal {
                 "noop" => NoOp,
                 "print" => Print,
                 "println"  => PrintLn,
+                "swap"  => Swap,
+                "drop"  => Drop,
+                "swap"  => Swap,
+                "dup"  => Dup,
+                "rev_stack"  => RevStack,
+                "drop_stack"  => DropStack,
+                "dup_stack"  => DupStack,
+                "dbg_stack"  => DbgStack,
                 _ => {
                     compiler_error(format!("The internal call {} is not implemented", str), pos);
                     unreachable!()
