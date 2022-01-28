@@ -1,6 +1,6 @@
 use crate::util::operation::OperationAddr;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum RegisterType {
     Int(i32),
     Pointer(OperationAddr),

@@ -107,6 +107,45 @@ impl VM {
                                 runtime_error_str("Stack is empty", postion.clone());
                             }
                         }
+                        Internal::Swap => {
+                            if self.stack.len() < 2 {
+                                runtime_error_str("To few elements on stack", postion.clone());
+                            }
+
+                            let a = self.stack.pop().unwrap();
+                            let b = self.stack.pop().unwrap();
+                            self.stack.push(a);
+                            self.stack.push(b);
+                        }
+                        Internal::Drop => {
+                            if self.stack.len() < 1 {
+                                runtime_error_str("To few elements on stack", postion.clone());
+                            }
+                            self.stack.pop().unwrap();
+                        }
+                        Internal::Dup => {
+                            if self.stack.len() < 1 {
+                                runtime_error_str("To few elements on stack", postion.clone());
+                            }
+
+                            let top = self.stack.pop().unwrap();
+                            self.stack.push(top.clone());
+                            self.stack.push(top);
+                        }
+                        Internal::RevStack => {
+                            self.stack.reverse();
+                        }
+                        Internal::DropStack => {
+                            self.stack.clear();
+                            self.stack.shrink_to_fit()
+                        }
+                        Internal::DupStack => {
+                            let to_add = self.stack.clone();
+                            self.stack.extend(to_add);
+                        }
+                        Internal::DbgStack => {
+                            println!("{:#?}", self.stack);
+                        }
                     }
                 }
             }
