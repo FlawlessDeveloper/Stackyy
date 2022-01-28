@@ -33,3 +33,8 @@ Hello world:
 "Hello world" println
 ```
 
+Stack manipulation
+
+```shell
+"x2" dup println println
+```
