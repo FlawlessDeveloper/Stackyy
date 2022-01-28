@@ -167,27 +167,34 @@ pub fn pre_parse(string: String, file: String) -> Vec<(Position, String)> {
             let mut vec = collect.3;
             let line_string = line.clone().1;
 
-            if !collect.0 {
-                if line_string.starts_with("\"") {
-                    change = true;
-                    append.push_str(&line_string);
-                    append.push_str(" ");
-                    position = line.0;
-                } else {
-                    vec.push(line);
-                }
+            if line_string.starts_with("\"") && line_string.ends_with("\"") {
+                vec.push((position.clone(), line_string));
+                change = false;
+                append = String::new();
             } else {
-                if line_string.ends_with("\"") {
-                    change = false;
-                    append.push_str(&line_string);
-                    vec.push((position, append.clone()));
-                    append = String::new();
-                    position = Position::default();
+                if !collect.0 {
+                    if line_string.starts_with("\"") {
+                        change = true;
+                        append.push_str(&line_string);
+                        append.push_str(" ");
+                        position = line.0;
+                    } else {
+                        vec.push(line);
+                    }
                 } else {
-                    append.push_str(&line_string);
-                    append.push_str(" ");
-                }
-            };
+                    if line_string.ends_with("\"") {
+                        change = false;
+                        append.push_str(&line_string);
+                        vec.push((position, append.clone()));
+                        append = String::new();
+                        position = Position::default();
+                    } else {
+                        append.push_str(&line_string);
+                        append.push_str(" ");
+                    }
+                };
+            }
+
             (change, position, append, vec)
         });
 
