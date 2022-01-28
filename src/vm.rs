@@ -42,9 +42,7 @@ impl From<State> for VM {
 
 impl VM {
     pub fn run(&mut self) {
-
         while self.ip < self.ops.len() as i32 {
-
             let op = self.ops.get(self.ip as usize).unwrap();
 
             self.execute(op.clone());
@@ -52,7 +50,7 @@ impl VM {
         }
     }
 
-    fn execute(&mut self, op : (Position, Operation)) {
+    fn execute(&mut self, op: (Position, Operation)) {
         let postion = op.0;
         let operation = op.1;
 
@@ -81,7 +79,7 @@ impl VM {
                 if let Operand::Internal(int) = operation.operand.unwrap() {
                     match int {
                         Internal::NoOp => {}
-                        Internal::Print => {
+                        Internal::Print | Internal::PrintLn => {
                             let pop = self.stack.pop();
                             if let Some(reg) = pop {
                                 match reg {
@@ -100,6 +98,10 @@ impl VM {
                                     RegisterType::Empty => {
                                         runtime_error_str("Stack is empty", postion.clone());
                                     }
+                                }
+
+                                if int == Internal::PrintLn {
+                                    println!();
                                 }
                             } else {
                                 runtime_error_str("Stack is empty", postion.clone());
