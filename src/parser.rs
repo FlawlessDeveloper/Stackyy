@@ -71,28 +71,51 @@ impl State {
                 if let TokenValue::Keyword(keyword) = value {
                     match keyword {
                         Keyword::INCLUDE => {
-                            let path = self.tokens.remove(index);
+                            if self.included {
+                                compiler_error_str("Nested includes are not allowed", pos.clone());
+                            }
 
-                            if let TokenValue::String(path) = path.1.value() {
-                                let state = match OpenOptions::new().read(true).open(path) {
-                                    Ok(mut file) => {
-                                        let mut string = String::new();
-                                        match file.read_to_string(&mut string) {
-                                            Ok(_) => {
-                                                let pre_parsed = pre_parse(string, path.clone());
-                                                tokenize(pre_parsed)
-                                            }
-                                            Err(_) => {
-                                                compiler_error(format!("The file {} could not be read", path), pos);
-                                                unreachable!()
-                                            }
-                                        }
-                                    }
-                                    Err(_) => {
-                                        compiler_error(format!("The file {} could not be opened", path), pos);
-                                        unreachable!()
-                                    }
-                                };
+                            let path = self.tokens.get(index - 1).unwrap();
+
+                            if let TokenValue::String(s_path) = path.1.value().clone() {
+                                let mut incl_path = self.path.clone();
+                                incl_path.push(s_path);
+
+                                let file = OpenOptions::new().read(true).open(&incl_path);
+                                if file.is_err() {
+                                    compiler_error(format!("The file {:?} could not be found", incl_path), pos.clone());
+                                }
+
+                                let mut string = String::new();
+
+                                let mut file = file.unwrap();
+                                if file.read_to_string(&mut string).is_err() {
+                                    compiler_error(format!("The file {:?} could not be read from", incl_path), pos.clone());
+                                }
+
+                                let parsed = pre_parse(string, incl_path.clone(), incl_path.parent().unwrap().to_path_buf());
+                                let state = tokenize(parsed, true, incl_path.parent().unwrap().to_path_buf());
+
+                                self.operations.extend(state.operations);
+                            } else {
+                                compiler_error(format!("No string passed to include. Found: {:?}", path.1.value()), pos.clone());
+                                unreachable!()
+                            }
+                        }
+                        Keyword::If => {
+                            ops.push(Operation {
+                                typ: OperationType::Internal,
+                                token: token.clone(),
+                                operand: Some(Operand::Internal(Internal::_IfStarts)),
+                            })
+                        }
+                        Keyword::Do => {
+                            self.if_ops.push(vec![]);
+                        }
+                        Keyword::ElseIf | Keyword::Else => {
+                            if self.if_ops.len() == 0 {
+                                compiler_error_str("Elif without preceding if", pos.clone());
+                            }
 
                             let if_ops = self.if_ops.pop().unwrap();
 
