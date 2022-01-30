@@ -154,6 +154,9 @@ impl VM {
                     self.execute(str.as_ref().clone());
                 }
             }
+            _ => {
+                println!("Operation: {:?} not implemented yet", operation)
+            }
         }
     }
 }
