@@ -1,9 +1,9 @@
-use crate::util::operation::OperationAddr;
+use crate::util::operation::JumpOffset;
 
 #[derive(Clone, Debug)]
 pub enum RegisterType {
     Int(i32),
-    Pointer(OperationAddr),
+    Pointer(JumpOffset),
     String(String),
     Bool(bool),
     Empty

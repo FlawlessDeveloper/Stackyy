@@ -61,7 +61,7 @@ impl VM {
                 }
             }
             OperationType::PushPtr => {
-                if let Operand::OpAddr(op) = operation.operand.unwrap() {
+                if let Operand::Jump(op) = operation.operand.unwrap() {
                     self.stack.push(RegisterType::Pointer(op))
                 }
             }
@@ -154,9 +154,14 @@ impl VM {
                     }
                 }
             }
-            OperationType::Include => {
-                if let Operand::Include(str) = operation.operand.unwrap() {
-                    self.execute(str.as_ref().clone());
+            OperationType::Jump => {
+                if let Operand::Jump(offset) = operation.operand.unwrap() {
+                    let new_ip = self.ip + offset;
+                    if new_ip > (self.ops.len() - 1) as i32 {
+                        runtime_error_str("Jump outside of operations", postion);
+                    }
+
+                    self.ip = new_ip;
                 }
             }
             _ => {
