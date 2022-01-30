@@ -3,6 +3,7 @@
 use std::fmt::Arguments;
 use std::fs::OpenOptions;
 use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::process::exit;
 use backtrace::Backtrace;
 
@@ -52,8 +53,11 @@ fn main() {
                 content
             };
 
-            let pre_parsed = pre_parse(file_text, args.file);
-            let parsed = tokenize(pre_parsed);
+            let file_path = PathBuf::from(args.file.clone());
+            let path = file_path.clone().parent().unwrap().to_path_buf();
+
+            let pre_parsed = pre_parse(file_text, file_path, path.clone());
+            let parsed = tokenize(pre_parsed, false, path);
 
             if parsed.type_check() {
                 let mut vm = VM::from(parsed);

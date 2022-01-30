@@ -14,7 +14,7 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(tokens: Vec<(Position, Token)>) -> Self {
+    pub fn new(tokens: Vec<(Position, Token)>, path: PathBuf) -> Self {
         Self {
             tokens,
             operations: vec![],
@@ -126,7 +126,7 @@ impl State {
     }
 }
 
-pub fn pre_parse(string: String, file: String) -> Vec<(Position, String)> {
+pub fn pre_parse(string: String, file: PathBuf, path: PathBuf) -> Vec<(Position, String)> {
     let lines: Vec<(u32, String)> = string.lines().fold(vec![], |mut count, line| {
         count.push(((count.len() + 1) as u32, line.to_string()));
         count
@@ -156,7 +156,7 @@ pub fn pre_parse(string: String, file: String) -> Vec<(Position, String)> {
                 (Position {
                     token_pos_line: line.0,
                     token_pos_x: token.0,
-                    file: file.clone()
+                    file: file.clone(),
                 }, token.clone().1)
             }).collect::<Vec<(Position, String)>>()
         })
@@ -210,7 +210,7 @@ pub fn pre_parse(string: String, file: String) -> Vec<(Position, String)> {
     lines
 }
 
-pub fn tokenize(tokens: Vec<(Position, String)>) -> State {
+pub fn tokenize(tokens: Vec<(Position, String)>, included: bool, path: PathBuf) -> State {
     let rev = tokens.iter().map(|token| (token.clone().0, Token::from(token.clone()))).rev();
     let iter = rev.clone().fold(vec![], |mut acc, token| {
         acc.push((acc.len(), token));
