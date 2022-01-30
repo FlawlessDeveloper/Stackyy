@@ -1,8 +1,14 @@
 use crate::util::{compiler_error, compiler_error_str, compiler_warning};
 use crate::util::position::Position;
+use crate::util::token::Keyword::{Do, Else, ElseIf, End, If, INCLUDE};
 
-static KEYWORDS: [&'static str; 1] = [
-    "include"
+static KEYWORDS: [&'static str; 6] = [
+    "include",
+    "if",
+    "do",
+    "elif",
+    "else",
+    "end"
 ];
 
 #[derive(Clone, Debug)]
@@ -21,9 +27,14 @@ pub enum TokenValue {
 }
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Keyword {
     INCLUDE,
+    If,
+    Do,
+    ElseIf,
+    Else,
+    End,
 }
 
 
@@ -58,7 +69,12 @@ impl From<(Position, String)> for Token {
                 text: str.clone().1,
                 location: str.0,
                 value: TokenValue::Keyword(match str.1.as_ref() {
-                    "include" => Keyword::INCLUDE,
+                    "include" => INCLUDE,
+                    "if" => If,
+                    "do" => Do,
+                    "elif" => ElseIf,
+                    "else" => Else,
+                    "end" => End,
                     _ => unreachable!()
                 }),
             }

@@ -146,6 +146,11 @@ impl VM {
                         Internal::DbgStack => {
                             println!("{:#?}", self.stack);
                         }
+                        Internal::_IfStarts => {}
+
+                        _ => {
+                            println!("Internal: {:?} not implemented yet", int)
+                        }
                     }
                 }
             }

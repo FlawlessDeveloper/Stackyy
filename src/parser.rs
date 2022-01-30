@@ -10,7 +10,10 @@ use crate::util::token::*;
 pub struct State {
     tokens: Vec<(Position, Token)>,
     operations: Vec<(Position, Operation)>,
-    stack: Vec<OperationAddr>,
+    stack: Vec<JumpOffset>,
+    if_ops: Vec<Vec<(Position, Operation)>>,
+    included: bool,
+    path: PathBuf,
 }
 
 impl State {
@@ -91,18 +94,33 @@ impl State {
                                     }
                                 };
 
-                                state.operations.iter().for_each(|op| {
-                                     ops.push(Operation {
-                                         typ: OperationType::Include,
-                                         token: token.clone(),
-                                         operand: Some(Operand::Include(Box::from(op.clone())))
-                                     });
+                            let if_ops = self.if_ops.pop().unwrap();
+
+                            if keyword.clone() == Keyword::Else {
+                                ops.push(Operation {
+                                    typ: OperationType::Jump,
+                                    token: token.clone(),
+                                    operand: Some(Operand::Jump(if_ops.len() as JumpOffset)),
                                 });
                             } else {
-                                compiler_error_str("No string passed to the compiler", pos);
-                                unreachable!()
+                                ops.push(Operation {
+                                    typ: OperationType::JumpIf,
+                                    token: token.clone(),
+                                    operand: Some(Operand::Jump(if_ops.len() as JumpOffset)),
+                                });
                             }
+
+                            self.operations.extend(if_ops);
+
+                            ops.push(Operation {
+                                typ: OperationType::Internal,
+                                token: token.clone(),
+                                operand: Some(Operand::Internal(Internal::_IfStarts)),
+                            });
+
+                            self.if_ops.push(vec![]);
                         }
+                        Keyword::End => {}
                     }
 
                 }
@@ -113,7 +131,13 @@ impl State {
 
         to_add.iter().for_each(|to_add| {
             let pos = pos.clone();
-            self.operations.push((pos, to_add.clone()))
+            if self.if_ops.len() > 0 {
+                let mut ops = self.if_ops.pop().unwrap();
+                ops.push((pos, to_add.clone()));
+                self.if_ops.push(ops);
+            } else {
+                self.operations.push((pos, to_add.clone()));
+            }
         });
     }
 
