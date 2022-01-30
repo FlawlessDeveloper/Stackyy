@@ -5,8 +5,8 @@ use std::fs::OpenOptions;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::exit;
-use backtrace::Backtrace;
 
+use backtrace::Backtrace;
 use clap::Parser;
 
 use crate::args::{Action, Args};

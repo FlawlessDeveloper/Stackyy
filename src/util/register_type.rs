@@ -6,5 +6,5 @@ pub enum RegisterType {
     Pointer(JumpOffset),
     String(String),
     Bool(bool),
-    Empty
+    Empty,
 }
