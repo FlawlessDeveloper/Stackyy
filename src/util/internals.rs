@@ -1,9 +1,9 @@
 use crate::util::{compiler_error, compiler_error_str};
-use crate::util::internals::Internal::{DbgStack, Drop, DropStack, Dup, DupStack, NoOp, Print, PrintLn, RevStack, Swap};
+use crate::util::internals::Internal::{DbgStack, Drop, DropStack, Dup, DupStack, Equals, NoOp, Print, PrintLn, RevStack, Swap};
 use crate::util::position::Position;
 use crate::util::token::TokenValue;
 
-static INTERNALS: [&str; 10] = [
+static INTERNALS: [&str; 11] = [
     "noop",
     "print",
     "println",
@@ -14,6 +14,7 @@ static INTERNALS: [&str; 10] = [
     "drop_stack",
     "dup_stack",
     "dbg_stack",
+    "=",
 ];
 
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
@@ -28,6 +29,8 @@ pub enum Internal {
     DropStack,
     DupStack,
     DbgStack,
+    Equals,
+    _IfStarts,
 }
 
 pub fn to_internal(str: &TokenValue, pos: Position) -> Internal {
