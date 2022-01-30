@@ -203,7 +203,7 @@ pub fn pre_parse(string: String, file: String) -> Vec<(Position, String)> {
     }
 
     let lines = lines.iter()
-        .filter(|line| line.1.len() > 1)
+        .filter(|line| line.1.len() > 0)
         .map(|line| line.clone())
         .collect();
 
