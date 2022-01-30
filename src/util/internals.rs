@@ -1,9 +1,9 @@
 use crate::util::{compiler_error, compiler_error_str};
-use crate::util::internals::Internal::{DbgStack, Drop, DropStack, Dup, DupStack, Equals, NoOp, Print, PrintLn, RevStack, Swap};
+use crate::util::internals::Internal::{DbgStack, Drop, DropStack, Dup, DupStack, Equals, Larger, LargerEq, NoOp, Print, PrintLn, RevStack, Smaller, SmallerEq, Swap};
 use crate::util::position::Position;
 use crate::util::token::TokenValue;
 
-static INTERNALS: [&str; 11] = [
+static INTERNALS: [&str; 15] = [
     "noop",
     "print",
     "println",
@@ -15,6 +15,10 @@ static INTERNALS: [&str; 11] = [
     "dup_stack",
     "dbg_stack",
     "=",
+    "<",
+    ">",
+    "<=",
+    ">=",
 ];
 
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
@@ -30,6 +34,10 @@ pub enum Internal {
     DupStack,
     DbgStack,
     Equals,
+    Larger,
+    Smaller,
+    LargerEq,
+    SmallerEq,
     _IfStarts,
 }
 
@@ -39,15 +47,20 @@ pub fn to_internal(str: &TokenValue, pos: Position) -> Internal {
             match str.as_str() {
                 "noop" => NoOp,
                 "print" => Print,
-                "println"  => PrintLn,
-                "swap"  => Swap,
-                "drop"  => Drop,
-                "swap"  => Swap,
-                "dup"  => Dup,
-                "rev_stack"  => RevStack,
-                "drop_stack"  => DropStack,
-                "dup_stack"  => DupStack,
-                "dbg_stack"  => DbgStack,
+                "println" => PrintLn,
+                "swap" => Swap,
+                "drop" => Drop,
+                "swap" => Swap,
+                "dup" => Dup,
+                "rev_stack" => RevStack,
+                "drop_stack" => DropStack,
+                "dup_stack" => DupStack,
+                "dbg_stack" => DbgStack,
+                "=" => Equals,
+                "<" => Larger,
+                ">" => Smaller,
+                "<=" => LargerEq,
+                ">=" => SmallerEq,
                 _ => {
                     compiler_error(format!("The internal call {} is not implemented", str), pos);
                     unreachable!()

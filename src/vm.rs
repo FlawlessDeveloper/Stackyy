@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use crate::parser::State;
 use crate::util::{compiler_error, compiler_error_str, runtime_error_str};
 use crate::util::internals::Internal;
@@ -23,7 +25,6 @@ pub struct VM {
 impl From<State> for VM {
     fn from(state: State) -> Self {
         let mut ops = state.get_ops();
-        ops.reverse();
         Self {
             ip: 0,
             ops,
@@ -53,7 +54,6 @@ impl VM {
     fn execute(&mut self, op: (Position, Operation)) {
         let postion = op.0;
         let operation = op.1;
-
         match operation.typ {
             OperationType::PushInt => {
                 if let Operand::Int(op) = operation.operand.unwrap() {
@@ -80,31 +80,30 @@ impl VM {
                     match int {
                         Internal::NoOp => {}
                         Internal::Print | Internal::PrintLn => {
-                            let pop = self.stack.pop();
-                            if let Some(reg) = pop {
-                                match reg {
-                                    RegisterType::Int(int) => {
-                                        print!("{}", int);
-                                    }
-                                    RegisterType::Pointer(pointer) => {
-                                        print!("*{:#x}", pointer);
-                                    }
-                                    RegisterType::String(str) => {
-                                        print!("{}", str)
-                                    }
-                                    RegisterType::Bool(bool) => {
-                                        print!("{}", bool)
-                                    }
-                                    RegisterType::Empty => {
-                                        runtime_error_str("Stack is empty", postion.clone());
-                                    }
+                            if self.stack.len() == 0 {
+                                runtime_error_str("To few elements on stack", postion.clone());
+                            }
+                            let reg = self.stack.pop().unwrap();
+                            match reg {
+                                RegisterType::Int(int) => {
+                                    print!("{}", int);
                                 }
+                                RegisterType::Pointer(pointer) => {
+                                    print!("*{:#x}", pointer);
+                                }
+                                RegisterType::String(str) => {
+                                    print!("{}", str)
+                                }
+                                RegisterType::Bool(bool) => {
+                                    print!("{}", bool)
+                                }
+                                RegisterType::Empty => {
+                                    runtime_error_str("Stack is empty", postion.clone());
+                                }
+                            }
 
-                                if int == Internal::PrintLn {
-                                    println!();
-                                }
-                            } else {
-                                runtime_error_str("Stack is empty", postion.clone());
+                            if int == Internal::PrintLn {
+                                println!();
                             }
                         }
                         Internal::Swap => {
@@ -147,6 +146,68 @@ impl VM {
                             println!("{:#?}", self.stack);
                         }
                         Internal::_IfStarts => {}
+                        Internal::Equals => {
+                            if self.stack.len() < 2 {
+                                runtime_error_str("To few elements on stack", postion.clone());
+                            }
+                            let a = self.stack.pop().unwrap();
+                            let b = self.stack.pop().unwrap();
+
+                            let success = if let RegisterType::String(stra) = a {
+                                if let RegisterType::String(strb) = b {
+                                    stra == strb
+                                } else {
+                                    false
+                                }
+                            } else if let RegisterType::Int(inta) = a {
+                                if let RegisterType::Int(intb) = b {
+                                    inta == intb
+                                } else {
+                                    false
+                                }
+                            } else if let RegisterType::Bool(boola) = a {
+                                if let RegisterType::Bool(boolb) = b {
+                                    boola == boolb
+                                } else {
+                                    false
+                                }
+                            } else {
+                                runtime_error_str("Comparison of invalid types", postion.clone());
+                                unreachable!()
+                            };
+
+                            self.stack.push(RegisterType::Bool(success));
+                        }
+                        Internal::Larger | Internal::LargerEq | Internal::Smaller | Internal::SmallerEq => {
+                            if self.stack.len() < 2 {
+                                runtime_error_str("To few elements on stack", postion.clone());
+                            }
+
+                            let a = self.stack.pop().unwrap();
+                            let b = self.stack.pop().unwrap();
+
+                            let success = if let RegisterType::Int(inta) = a {
+                                if let RegisterType::Int(intb) = b {
+                                    match int {
+                                        Internal::Larger => { inta > intb }
+                                        Internal::Smaller => { inta < intb }
+                                        Internal::LargerEq => { inta >= intb }
+                                        Internal::SmallerEq => { inta <= intb }
+                                        _ => {
+                                            unreachable!()
+                                        }
+                                    }
+                                } else {
+                                    runtime_error_str("Comparison of invalid types", postion.clone());
+                                    unreachable!();
+                                }
+                            } else {
+                                runtime_error_str("Comparison of invalid types", postion.clone());
+                                unreachable!();
+                            };
+
+                            self.stack.push(RegisterType::Bool(success));
+                        }
 
                         _ => {
                             println!("Internal: {:?} not implemented yet", int)

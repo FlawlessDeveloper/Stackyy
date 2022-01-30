@@ -1,4 +1,5 @@
 #![feature(panic_info_message)]
+#![feature(trusted_random_access)]
 
 use std::fmt::Arguments;
 use std::fs::OpenOptions;
