@@ -22,6 +22,20 @@ impl State {
             tokens,
             operations: vec![],
             stack: vec![],
+            if_ops: vec![],
+            included: false,
+            path,
+        }
+    }
+
+    pub fn new_with_include(tokens: Vec<(Position, Token)>, path: PathBuf) -> Self {
+        Self {
+            tokens,
+            operations: vec![],
+            stack: vec![],
+            if_ops: vec![],
+            included: true,
+            path,
         }
     }
 
@@ -262,7 +276,11 @@ pub fn tokenize(tokens: Vec<(Position, String)>, included: bool, path: PathBuf) 
     let iter = rev.clone().fold(vec![], |mut acc, token| {
         acc.push((acc.len(), token));
         acc
-    }).iter().fold(State::new(rev.clone().collect()), |mut acc, token| {
+    }).iter().fold(if included {
+        State::new_with_include(rev.clone().collect(), path)
+    } else {
+        State::new(rev.clone().collect(), path)
+    }, |mut acc, token| {
         acc.push(token.clone().1.clone().0, &token.1.clone().1, token.clone().0);
         acc
     });
