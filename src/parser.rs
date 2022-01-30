@@ -1,5 +1,7 @@
 use std::fs::OpenOptions;
 use std::io::Read;
+use std::iter::TrustedRandomAccessNoCoerce;
+use std::os::linux::raw::stat;
 use std::path::{Path, PathBuf};
 
 use crate::util::{compiler_error, compiler_error_str};
@@ -9,7 +11,6 @@ use crate::util::position::Position;
 use crate::util::token::*;
 
 pub struct State {
-    tokens: Vec<(Position, Token)>,
     operations: Vec<(Position, Operation)>,
     stack: Vec<JumpOffset>,
     if_ops: Vec<Vec<(Position, Operation)>>,
@@ -18,9 +19,8 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(tokens: Vec<(Position, Token)>, path: PathBuf) -> Self {
+    pub fn new(path: PathBuf) -> Self {
         Self {
-            tokens,
             operations: vec![],
             stack: vec![],
             if_ops: vec![],
@@ -29,9 +29,8 @@ impl State {
         }
     }
 
-    pub fn new_with_include(tokens: Vec<(Position, Token)>, path: PathBuf) -> Self {
+    pub fn new_with_include(path: PathBuf) -> Self {
         Self {
-            tokens,
             operations: vec![],
             stack: vec![],
             if_ops: vec![],
@@ -40,142 +39,164 @@ impl State {
         }
     }
 
-    pub fn push(&mut self, pos: Position, token: &Token, index: usize) {
-        let value = token.value();
-        let to_add = match token.typ() {
-            TokenType::Word => {
+    pub fn update(&mut self, tokens: Vec<(Position, Token)>) {
+        let mut iterator = tokens.iter();
+
+        while iterator.size() != 0 {
+            let token = iterator.next();
+            if let Some(token) = token {
                 let token = token.clone();
-                let internal = to_internal(value, pos.clone());
-                vec![Operation {
-                    typ: OperationType::Internal,
-                    token,
-                    operand: Some(Operand::Internal(internal)),
-                }]
-            }
-            TokenType::Int => {
-                let token = token.clone();
-
-                vec![Operation {
-                    typ: OperationType::PushInt,
-                    token,
-                    operand: Some(Operand::Int(*if let TokenValue::Int(val) = value {
-                        val
-                    } else {
-                        compiler_error_str("Internal parser error occurred", pos);
-                        unreachable!();
-                    })),
-                }]
-            }
-            TokenType::Str => {
-                vec![Operation {
-                    typ: OperationType::PushStr,
-                    token: token.clone(),
-                    operand: Some(Operand::Str(if let TokenValue::String(str) = value {
-                        str.clone()
-                    } else {
-                        compiler_error_str("Internal parser error occurred", pos);
-                        unreachable!();
-                    })),
-                }]
-            }
-            TokenType::Keyword => {
-                let token = token.clone();
-
-                let mut ops = vec![];
-
-                if let TokenValue::Keyword(keyword) = value {
-                    match keyword {
-                        Keyword::INCLUDE => {
-                            if self.included {
-                                compiler_error_str("Nested includes are not allowed", pos.clone());
-                            }
-
-                            let path = self.tokens.get(index - 1).unwrap();
-
-                            if let TokenValue::String(s_path) = path.1.value().clone() {
-                                let mut incl_path = self.path.clone();
-                                incl_path.push(s_path);
-
-                                let file = OpenOptions::new().read(true).open(&incl_path);
-                                if file.is_err() {
-                                    compiler_error(format!("The file {:?} could not be found", incl_path), pos.clone());
-                                }
-
-                                let mut string = String::new();
-
-                                let mut file = file.unwrap();
-                                if file.read_to_string(&mut string).is_err() {
-                                    compiler_error(format!("The file {:?} could not be read from", incl_path), pos.clone());
-                                }
-
-                                let parsed = pre_parse(string, incl_path.clone(), incl_path.parent().unwrap().to_path_buf());
-                                let state = tokenize(parsed, true, incl_path.parent().unwrap().to_path_buf());
-
-                                self.operations.extend(state.operations);
-                            } else {
-                                compiler_error(format!("No string passed to include. Found: {:?}", path.1.value()), pos.clone());
-                                unreachable!()
-                            }
-                        }
-                        Keyword::If => {
-                            ops.push(Operation {
-                                typ: OperationType::Internal,
-                                token: token.clone(),
-                                operand: Some(Operand::Internal(Internal::_IfStarts)),
-                            })
-                        }
-                        Keyword::Do => {
-                            self.if_ops.push(vec![]);
-                        }
-                        Keyword::ElseIf | Keyword::Else => {
-                            if self.if_ops.len() == 0 {
-                                compiler_error_str("Elif without preceding if", pos.clone());
-                            }
-
-                            let if_ops = self.if_ops.pop().unwrap();
-
-                            if keyword.clone() == Keyword::Else {
-                                ops.push(Operation {
-                                    typ: OperationType::Jump,
-                                    token: token.clone(),
-                                    operand: Some(Operand::Jump(if_ops.len() as JumpOffset)),
-                                });
-                            } else {
-                                ops.push(Operation {
-                                    typ: OperationType::JumpIf,
-                                    token: token.clone(),
-                                    operand: Some(Operand::Jump(if_ops.len() as JumpOffset)),
-                                });
-                            }
-
-                            self.operations.extend(if_ops);
-
-                            ops.push(Operation {
-                                typ: OperationType::Internal,
-                                token: token.clone(),
-                                operand: Some(Operand::Internal(Internal::_IfStarts)),
-                            });
-
-                            self.if_ops.push(vec![]);
-                        }
-                        Keyword::End => {}
+                let pos = token.clone().0;
+                let token = token.clone().1;
+                let value = token.value();
+                let to_add = match token.typ() {
+                    TokenType::Word => {
+                        let token = token.clone();
+                        let internal = to_internal(value, pos.clone());
+                        vec![Operation {
+                            typ: OperationType::Internal,
+                            token,
+                            operand: Some(Operand::Internal(internal)),
+                        }]
                     }
-                }
+                    TokenType::Int => {
+                        let token = token.clone();
 
-                ops
-            }
-        };
+                        vec![Operation {
+                            typ: OperationType::PushInt,
+                            token,
+                            operand: Some(Operand::Int(*if let TokenValue::Int(val) = value {
+                                val
+                            } else {
+                                compiler_error_str("Internal parser error occurred", pos);
+                                unreachable!();
+                            })),
+                        }]
+                    }
+                    TokenType::Str => {
+                        vec![Operation {
+                            typ: OperationType::PushStr,
+                            token: token.clone(),
+                            operand: Some(Operand::Str(if let TokenValue::String(str) = value {
+                                str.clone()
+                            } else {
+                                compiler_error_str("Internal parser error occurred", pos);
+                                unreachable!();
+                            })),
+                        }]
+                    }
+                    TokenType::Keyword => {
+                        let token = token.clone();
 
-        to_add.iter().for_each(|to_add| {
-            let pos = pos.clone();
-            if self.if_ops.len() > 0 {
-                let mut ops = self.if_ops.pop().unwrap();
-                ops.push((pos, to_add.clone()));
-                self.if_ops.push(ops);
+                        let mut ops = vec![];
+
+                        if let TokenValue::Keyword(keyword) = value {
+                            match keyword {
+                                Keyword::INCLUDE => {
+                                    if self.included {
+                                        compiler_error_str("Nested includes are not allowed", pos.clone());
+                                    }
+
+                                    let path = iterator.next();
+
+                                    if let None = path {
+                                        compiler_error_str("No string provided. Empty tokenstream", pos.clone());
+                                    }
+
+                                    let path = path.unwrap();
+
+                                    if let TokenValue::String(s_path) = path.1.value().clone() {
+                                        let mut incl_path = self.path.clone();
+                                        incl_path.push(s_path);
+
+                                        let file = OpenOptions::new().read(true).open(&incl_path);
+                                        if file.is_err() {
+                                            compiler_error(format!("The file {:?} could not be found", incl_path), pos.clone());
+                                        }
+
+                                        let mut string = String::new();
+
+                                        let mut file = file.unwrap();
+                                        if file.read_to_string(&mut string).is_err() {
+                                            compiler_error(format!("The file {:?} could not be read from", incl_path), pos.clone());
+                                        }
+
+                                        let parsed = pre_parse(string, incl_path.clone(), incl_path.parent().unwrap().to_path_buf());
+                                        let state = tokenize(parsed, true, incl_path.parent().unwrap().to_path_buf());
+
+                                        self.skip = 59;
+                                        self.operations.extend(state.operations);
+                                    } else {
+                                        compiler_error(format!("No string passed to include. Found: {:?}", path.1.value()), pos.clone());
+                                        unreachable!()
+                                    }
+                                }
+                                Keyword::If => {
+                                    ops.push(Operation {
+                                        typ: OperationType::Internal,
+                                        token: token.clone(),
+                                        operand: Some(Operand::Internal(Internal::_IfStarts)),
+                                    })
+                                }
+                                Keyword::Do => {
+                                    self.if_ops.push(vec![]);
+                                }
+                                Keyword::ElseIf | Keyword::Else => {
+                                    if self.if_ops.len() == 0 {
+                                        compiler_error_str("Elif without preceding if", pos.clone());
+                                    }
+
+                                    let if_ops = self.if_ops.pop().unwrap();
+
+                                    if keyword.clone() == Keyword::Else {
+                                        ops.push(Operation {
+                                            typ: OperationType::Jump,
+                                            token: token.clone(),
+                                            operand: Some(Operand::Jump(if_ops.len() as JumpOffset)),
+                                        });
+                                    } else {
+                                        ops.push(Operation {
+                                            typ: OperationType::JumpIf,
+                                            token: token.clone(),
+                                            operand: Some(Operand::Jump(if_ops.len() as JumpOffset)),
+                                        });
+                                    }
+
+                                    self.operations.extend(if_ops);
+
+                                    ops.push(Operation {
+                                        typ: OperationType::Internal,
+                                        token: token.clone(),
+                                        operand: Some(Operand::Internal(Internal::_IfStarts)),
+                                    });
+
+                                    self.if_ops.push(vec![]);
+                                }
+                                Keyword::End => {}
+                            }
+                        }
+
+                        ops
+                    }
+                };
+
+                to_add.iter().for_each(|to_add| {
+                    let pos = pos.clone();
+                    if self.if_ops.len() > 0 {
+                        let mut ops = self.if_ops.pop().unwrap();
+                        ops.push((pos, to_add.clone()));
+                        self.if_ops.push(ops);
+                    } else {
+                        self.operations.push((pos, to_add.clone()));
+                    }
+                });
             } else {
-                self.operations.push((pos, to_add.clone()));
+                compiler_error_str("Empty token stream", Position::default());
             }
-        });
+        }
+
+
+        println!("{}", self.skip)
     }
 
     pub fn type_check(&self) -> bool {
@@ -228,12 +249,12 @@ pub fn pre_parse(string: String, file: PathBuf, path: PathBuf) -> Vec<(Position,
             let mut vec = collect.3;
             let line_string = line.clone().1;
 
-            if line_string.starts_with("\"") && line_string.ends_with("\"") {
+            if line_string.starts_with("\"") && line_string.ends_with("\"") && line_string.len() != 1 {
                 vec.push((position.clone(), line_string));
                 change = false;
                 append = String::new();
             } else {
-                if !collect.0 {
+                if !change {
                     if line_string.starts_with("\"") {
                         change = true;
                         append.push_str(&line_string);
@@ -272,18 +293,13 @@ pub fn pre_parse(string: String, file: PathBuf, path: PathBuf) -> Vec<(Position,
 }
 
 pub fn tokenize(tokens: Vec<(Position, String)>, included: bool, path: PathBuf) -> State {
-    let rev = tokens.iter().map(|token| (token.clone().0, Token::from(token.clone()))).rev();
-    let iter = rev.clone().fold(vec![], |mut acc, token| {
-        acc.push((acc.len(), token));
-        acc
-    }).iter().fold(if included {
-        State::new_with_include(rev.clone().collect(), path)
-    } else {
-        State::new(rev.clone().collect(), path)
-    }, |mut acc, token| {
-        acc.push(token.clone().1.clone().0, &token.1.clone().1, token.clone().0);
-        acc
-    });
+    let mut state = if included { State::new_with_include(path) } else { State::new(path) };
 
-    iter
+    state.update(tokens.iter().map(|token| {
+        let token = token.clone();
+
+        (token.clone().0, Token::from(token))
+    }).collect());
+
+    state
 }
