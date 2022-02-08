@@ -124,7 +124,6 @@ impl State {
                                         let parsed = pre_parse(string, incl_path.clone(), incl_path.parent().unwrap().to_path_buf());
                                         let state = tokenize(parsed, true, incl_path.parent().unwrap().to_path_buf());
 
-                                        self.skip = 59;
                                         self.operations.extend(state.operations);
                                     } else {
                                         compiler_error(format!("No string passed to include. Found: {:?}", path.1.value()), pos.clone());
@@ -195,8 +194,6 @@ impl State {
             }
         }
 
-
-        println!("{}", self.skip)
     }
 
     pub fn type_check(&self) -> bool {
