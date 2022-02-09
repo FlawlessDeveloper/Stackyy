@@ -212,7 +212,7 @@ pub fn pre_parse(string: String, file: PathBuf, path: PathBuf) -> Vec<(Position,
     });
 
     let (unclosed, pos, _, lines): (bool, Position, String, Vec<(Position, String)>) = lines.iter()
-        .filter(|line| line.1.len() > 1)
+        .filter(|line| line.1.len() > 0)
         .map(|line| {
             if !line.1.contains("//") {
                 line.clone()
