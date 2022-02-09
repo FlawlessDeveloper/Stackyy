@@ -260,7 +260,7 @@ pub fn pre_parse(string: String, file: PathBuf, path: PathBuf) -> Vec<(Position,
         })
         .filter(|line| line.1.len() > 0)
         .map(|line| {
-            (line.clone().0, line.1.trim())
+            (line.clone().0, line.1.trim().to_string())
         })
         .map(|line| {
             let tokens = line.1.split(" ").fold(vec![], |mut tokens, token| {
