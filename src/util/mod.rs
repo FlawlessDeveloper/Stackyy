@@ -23,7 +23,7 @@ pub fn compiler_warning_str(msg: &str, pos: Position) {
 }
 
 pub fn runtime_error(msg: String, pos: Position) {
-    panic!("Compiler error caused by {} -> {}", pos, msg);
+    panic!("Runtime error caused by {} -> {}", pos, msg);
 }
 
 pub fn runtime_error_str(msg: &str, pos: Position) {
