@@ -185,7 +185,7 @@ impl VM {
 
                             if let RegisterType::Int(top) = top {
                                 if let RegisterType::Int(bottom) = bottom {
-                                    self.stack.push(RegisterType::Int(bottom + top))
+                                    self.stack.push(RegisterType::Int(top + bottom))
                                 } else {
                                     runtime_error_str("Usage of invalid types", position.clone());
                                 }
@@ -203,7 +203,7 @@ impl VM {
 
                             if let RegisterType::Int(top) = top {
                                 if let RegisterType::Int(bottom) = bottom {
-                                    self.stack.push(RegisterType::Int(bottom - top))
+                                    self.stack.push(RegisterType::Int(top - bottom))
                                 } else {
                                     runtime_error_str("Usage of invalid types", position.clone());
                                 }
@@ -221,7 +221,7 @@ impl VM {
 
                             if let RegisterType::Int(top) = top {
                                 if let RegisterType::Int(bottom) = bottom {
-                                    self.stack.push(RegisterType::Int(bottom * top))
+                                    self.stack.push(RegisterType::Int(top * bottom))
                                 } else {
                                     runtime_error_str("Usage of invalid types", position.clone());
                                 }
@@ -239,7 +239,7 @@ impl VM {
 
                             if let RegisterType::Int(top) = top {
                                 if let RegisterType::Int(bottom) = bottom {
-                                    self.stack.push(RegisterType::Int(bottom / top))
+                                    self.stack.push(RegisterType::Int(top / bottom))
                                 } else {
                                     runtime_error_str("Usage of invalid types", position.clone());
                                 }
