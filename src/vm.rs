@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::process::exit;
 
 use crate::parser::{Function, State};
-use crate::util::{compiler_error, compiler_error_str, runtime_error, runtime_error_str, runtime_warning_str};
+use crate::util::{compiler_error, compiler_error_str, runtime_error, runtime_error_str, runtime_warning, runtime_warning_str};
 use crate::util::internals::Internal;
 use crate::util::operation::{Operand, Operation, OperationType};
 use crate::util::position::Position;
@@ -175,7 +175,104 @@ impl VM {
                         Internal::DbgStack => {
                             println!("{:#?}", self.stack);
                         }
-                        Internal::_IfStarts => {}
+                        Internal::Plus => {
+                            if self.stack.len() < 2 {
+                                runtime_error_str("To few elements on stack", position.clone());
+                            }
+
+                            let top = self.stack.pop().unwrap();
+                            let bottom = self.stack.pop().unwrap();
+
+                            if let RegisterType::Int(top) = top {
+                                if let RegisterType::Int(bottom) = bottom {
+                                    self.stack.push(RegisterType::Int(bottom + top))
+                                } else {
+                                    runtime_error_str("Usage of invalid types", position.clone());
+                                }
+                            } else {
+                                runtime_error_str("Usage of invalid types", position.clone());
+                            }
+                        }
+                        Internal::Minus => {
+                            if self.stack.len() < 2 {
+                                runtime_error_str("To few elements on stack", position.clone());
+                            }
+
+                            let top = self.stack.pop().unwrap();
+                            let bottom = self.stack.pop().unwrap();
+
+                            if let RegisterType::Int(top) = top {
+                                if let RegisterType::Int(bottom) = bottom {
+                                    self.stack.push(RegisterType::Int(bottom - top))
+                                } else {
+                                    runtime_error_str("Usage of invalid types", position.clone());
+                                }
+                            } else {
+                                runtime_error_str("Usage of invalid types", position.clone());
+                            }
+                        }
+                        Internal::Mult => {
+                            if self.stack.len() < 2 {
+                                runtime_error_str("To few elements on stack", position.clone());
+                            }
+
+                            let top = self.stack.pop().unwrap();
+                            let bottom = self.stack.pop().unwrap();
+
+                            if let RegisterType::Int(top) = top {
+                                if let RegisterType::Int(bottom) = bottom {
+                                    self.stack.push(RegisterType::Int(bottom * top))
+                                } else {
+                                    runtime_error_str("Usage of invalid types", position.clone());
+                                }
+                            } else {
+                                runtime_error_str("Usage of invalid types", position.clone());
+                            }
+                        }
+                        Internal::Div => {
+                            if self.stack.len() < 2 {
+                                runtime_error_str("To few elements on stack", position.clone());
+                            }
+
+                            let top = self.stack.pop().unwrap();
+                            let bottom = self.stack.pop().unwrap();
+
+                            if let RegisterType::Int(top) = top {
+                                if let RegisterType::Int(bottom) = bottom {
+                                    self.stack.push(RegisterType::Int(bottom / top))
+                                } else {
+                                    runtime_error_str("Usage of invalid types", position.clone());
+                                }
+                            } else {
+                                runtime_error_str("Usage of invalid types", position.clone());
+                            }
+                        }
+                        Internal::Squared => {
+                            if self.stack.len() < 1 {
+                                runtime_error_str("To few elements on stack", position.clone());
+                            }
+
+                            let top = self.stack.pop().unwrap();
+
+                            if let RegisterType::Int(top) = top {
+                                self.stack.push(RegisterType::Int(top * top))
+                            } else {
+                                runtime_error_str("Usage of invalid types", position.clone());
+                            }
+                        }
+                        Internal::Cubed => {
+                            if self.stack.len() < 1 {
+                                runtime_error_str("To few elements on stack", position.clone());
+                            }
+
+                            let top = self.stack.pop().unwrap();
+
+                            if let RegisterType::Int(top) = top {
+                                self.stack.push(RegisterType::Int(top * top * top))
+                            } else {
+                                runtime_error_str("Usage of invalid types", position.clone());
+                            }
+                        }
                         Internal::Equals => {
                             if self.stack.len() < 2 {
                                 runtime_error_str("To few elements on stack", position.clone());
@@ -270,7 +367,7 @@ impl VM {
                 }
             }
             _ => {
-                println!("Operation: {:?} not implemented yet", operation)
+                runtime_warning(format!("Operation: {:?} not implemented yet", operation), position.clone())
             }
         }
     }

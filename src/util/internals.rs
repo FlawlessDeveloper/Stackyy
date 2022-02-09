@@ -1,9 +1,9 @@
 use crate::util::{compiler_error, compiler_error_str};
-use crate::util::internals::Internal::{DbgStack, Drop, DropStack, Dup, DupStack, Equals, Larger, LargerEq, NoOp, Print, PrintLn, RevStack, Smaller, SmallerEq, Swap};
+use crate::util::internals::Internal::{Cubed, DbgStack, Div, Drop, DropStack, Dup, DupStack, Equals, Larger, LargerEq, Minus, Mult, NoOp, Plus, Print, PrintLn, RevStack, Smaller, SmallerEq, Squared, Swap};
 use crate::util::position::Position;
 use crate::util::token::TokenValue;
 
-static INTERNALS: [&str; 15] = [
+static INTERNALS: [&str; 21] = [
     "noop",
     "print",
     "println",
@@ -14,6 +14,12 @@ static INTERNALS: [&str; 15] = [
     "drop_stack",
     "dup_stack",
     "dbg_stack",
+    "+",
+    "-",
+    "*",
+    "/",
+    "squared",
+    "cubed",
     "=",
     "<",
     ">",
@@ -33,6 +39,12 @@ pub enum Internal {
     DropStack,
     DupStack,
     DbgStack,
+    Plus,
+    Minus,
+    Mult,
+    Div,
+    Squared,
+    Cubed,
     Equals,
     Larger,
     Smaller,
@@ -56,6 +68,12 @@ pub fn to_internal(str: &TokenValue, pos: Position) -> Internal {
                 "drop_stack" => DropStack,
                 "dup_stack" => DupStack,
                 "dbg_stack" => DbgStack,
+                "+" => Plus,
+                "-" => Minus,
+                "*" => Mult,
+                "/" => Div,
+                "squared" => Squared,
+                "cubed" => Cubed,
                 "=" => Equals,
                 "<" => Larger,
                 ">" => Smaller,
