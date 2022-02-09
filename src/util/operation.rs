@@ -2,7 +2,7 @@ use crate::util::internals::Internal;
 use crate::util::position::Position;
 use crate::util::token::Token;
 
-pub type JumpOffset = i32;
+pub type JumpOffset = u32;
 
 #[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Debug)]
 pub enum OperationType {
@@ -10,9 +10,12 @@ pub enum OperationType {
     PushPtr,
     PushBool,
     PushStr,
+    PushFunction,
     Internal,
     Jump,
     JumpIf,
+    Call,
+    CallIf,
 }
 
 #[derive(Clone, Debug)]
@@ -22,6 +25,7 @@ pub enum Operand {
     Bool(bool),
     Internal(Internal),
     Jump(JumpOffset),
+    Call(String)
 }
 
 #[derive(Clone, Debug)]

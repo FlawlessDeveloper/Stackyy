@@ -1,7 +1,9 @@
 use std::any::Any;
+use std::collections::HashMap;
+use std::process::exit;
 
-use crate::parser::State;
-use crate::util::{compiler_error, compiler_error_str, runtime_error_str};
+use crate::parser::{Function, State};
+use crate::util::{compiler_error, compiler_error_str, runtime_error, runtime_error_str, runtime_warning_str};
 use crate::util::internals::Internal;
 use crate::util::operation::{Operand, Operation, OperationType};
 use crate::util::position::Position;
@@ -10,7 +12,7 @@ use crate::vm;
 
 pub struct VM {
     ip: i32,
-    ops: Vec<(Position, Operation)>,
+    ops: HashMap<String, Function>,
     stack: Vec<RegisterType>,
     reg_a: RegisterType,
     reg_b: RegisterType,
@@ -43,17 +45,37 @@ impl From<State> for VM {
 
 impl VM {
     pub fn run(&mut self) {
-        while self.ip < self.ops.len() as i32 {
-            let op = self.ops.get(self.ip as usize).unwrap();
+        if !self.ops.contains_key("main") {
+            runtime_error_str("Program does not contain a main function", Position::default());
+        }
 
-            self.execute(op.clone());
-            self.ip += 1;
+        let start = self.ops.get("main").unwrap().clone();
+
+        self.execute_fn((&start, 0));
+
+        if self.stack.len() != 1 {
+            runtime_error_str("No return code provided", Position::default());
+        }
+
+        if let RegisterType::Int(exit_code) = self.stack.pop().unwrap() {
+            exit(exit_code)
+        } else {
+            runtime_error_str("Return code can only be of type integer", Position::default());
         }
     }
 
-    fn execute(&mut self, op: (Position, Operation)) {
-        let postion = op.0;
+    fn execute_fn(&mut self, fnc: (&Function, u8)) {
+        for operation in &fnc.0.operations {
+            self.execute_op(operation.clone(), fnc.1)
+        }
+    }
+
+    fn execute_op(&mut self, op: (Position, Operation), depth: u8) {
+        let position = op.0;
         let operation = op.1;
+        if depth > 40 {
+            runtime_error_str("Stack overflow", position.clone());
+        }
         match operation.typ {
             OperationType::PushInt => {
                 if let Operand::Int(op) = operation.operand.unwrap() {
@@ -75,13 +97,18 @@ impl VM {
                     self.stack.push(RegisterType::String(str))
                 }
             }
+            OperationType::PushFunction => {
+                if let Operand::Str(fnc) = operation.operand.unwrap() {
+                    self.stack.push(RegisterType::Function(fnc))
+                }
+            }
             OperationType::Internal => {
                 if let Operand::Internal(int) = operation.operand.unwrap() {
                     match int {
                         Internal::NoOp => {}
                         Internal::Print | Internal::PrintLn => {
                             if self.stack.len() == 0 {
-                                runtime_error_str("To few elements on stack", postion.clone());
+                                runtime_error_str("To few elements on stack", position.clone());
                             }
                             let reg = self.stack.pop().unwrap();
                             match reg {
@@ -97,8 +124,11 @@ impl VM {
                                 RegisterType::Bool(bool) => {
                                     print!("{}", bool)
                                 }
+                                RegisterType::Function(name) => {
+                                    print!("*{}()", name)
+                                }
                                 RegisterType::Empty => {
-                                    runtime_error_str("Stack is empty", postion.clone());
+                                    runtime_error_str("Stack is empty", position.clone());
                                 }
                             }
 
@@ -108,7 +138,7 @@ impl VM {
                         }
                         Internal::Swap => {
                             if self.stack.len() < 2 {
-                                runtime_error_str("To few elements on stack", postion.clone());
+                                runtime_error_str("To few elements on stack", position.clone());
                             }
 
                             let a = self.stack.pop().unwrap();
@@ -118,13 +148,13 @@ impl VM {
                         }
                         Internal::Drop => {
                             if self.stack.len() < 1 {
-                                runtime_error_str("To few elements on stack", postion.clone());
+                                runtime_error_str("To few elements on stack", position.clone());
                             }
                             self.stack.pop().unwrap();
                         }
                         Internal::Dup => {
                             if self.stack.len() < 1 {
-                                runtime_error_str("To few elements on stack", postion.clone());
+                                runtime_error_str("To few elements on stack", position.clone());
                             }
 
                             let top = self.stack.pop().unwrap();
@@ -148,7 +178,7 @@ impl VM {
                         Internal::_IfStarts => {}
                         Internal::Equals => {
                             if self.stack.len() < 2 {
-                                runtime_error_str("To few elements on stack", postion.clone());
+                                runtime_error_str("To few elements on stack", position.clone());
                             }
                             let a = self.stack.pop().unwrap();
                             let b = self.stack.pop().unwrap();
@@ -172,7 +202,7 @@ impl VM {
                                     false
                                 }
                             } else {
-                                runtime_error_str("Comparison of invalid types", postion.clone());
+                                runtime_error_str("Comparison of invalid types", position.clone());
                                 unreachable!()
                             };
 
@@ -180,7 +210,7 @@ impl VM {
                         }
                         Internal::Larger | Internal::LargerEq | Internal::Smaller | Internal::SmallerEq => {
                             if self.stack.len() < 2 {
-                                runtime_error_str("To few elements on stack", postion.clone());
+                                runtime_error_str("To few elements on stack", position.clone());
                             }
 
                             let a = self.stack.pop().unwrap();
@@ -198,11 +228,11 @@ impl VM {
                                         }
                                     }
                                 } else {
-                                    runtime_error_str("Comparison of invalid types", postion.clone());
+                                    runtime_error_str("Comparison of invalid types", position.clone());
                                     unreachable!();
                                 }
                             } else {
-                                runtime_error_str("Comparison of invalid types", postion.clone());
+                                runtime_error_str("Comparison of invalid types", position.clone());
                                 unreachable!();
                             };
 
@@ -215,14 +245,28 @@ impl VM {
                     }
                 }
             }
-            OperationType::Jump => {
-                if let Operand::Jump(offset) = operation.operand.unwrap() {
-                    let new_ip = self.ip + offset;
-                    if new_ip > (self.ops.len() - 1) as i32 {
-                        runtime_error_str("Jump outside of operations", postion);
+            OperationType::Call => {
+                if self.stack.len() == 0 {
+                    runtime_error_str("To few elements on stack", position.clone());
+                }
+
+                let top = self.stack.pop().unwrap();
+
+                if let RegisterType::Function(fnc) = top {
+                    if !self.ops.contains_key(&fnc) {
+                        runtime_error(format!("Function: {} does not exist", fnc), position.clone());
                     }
 
-                    self.ip = new_ip;
+                    let fnc = self.ops.get(&fnc).unwrap().clone();
+
+                    for operation in fnc.operations {
+                        self.execute_op(operation, depth + 1);
+                    }
+                }
+            }
+            OperationType::Jump => {
+                if let Operand::Jump(_offset) = operation.operand.unwrap() {
+                    runtime_warning_str("Jump operation not implemented yet", position.clone());
                 }
             }
             _ => {

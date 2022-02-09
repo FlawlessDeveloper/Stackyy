@@ -12,6 +12,7 @@ use clap::Parser;
 
 use crate::args::{Action, Args};
 use crate::parser::{pre_parse, tokenize};
+use crate::util::{compiler_error, compiler_error_str};
 use crate::vm::VM;
 
 pub mod args;
@@ -60,9 +61,13 @@ fn main() {
             let pre_parsed = pre_parse(file_text, file_path, path.clone());
             let parsed = tokenize(pre_parsed, false, path);
 
-            if parsed.type_check() {
-                let mut vm = VM::from(parsed);
-                vm.run();
+            let checked = parsed.type_check();
+
+            if checked.is_ok() {
+                checked.unwrap().run();
+            } else {
+                let error = checked.err().unwrap();
+                compiler_error(format!("Type check failed: {}", error.1), error.0)
             }
         }
         Action::Interpret | Action::Info => {

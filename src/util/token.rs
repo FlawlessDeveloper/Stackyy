@@ -1,13 +1,10 @@
 use crate::util::{compiler_error, compiler_error_str, compiler_warning};
 use crate::util::position::Position;
-use crate::util::token::Keyword::{Do, Else, ElseIf, End, If, INCLUDE};
+use crate::util::token::Keyword::{End, INCLUDE};
+use crate::util::types::Types;
 
-static KEYWORDS: [&'static str; 6] = [
+static KEYWORDS: [&'static str; 2] = [
     "include",
-    "if",
-    "do",
-    "elif",
-    "else",
     "end"
 ];
 
@@ -17,6 +14,7 @@ pub enum TokenType {
     Int,
     Str,
     Keyword,
+    Function,
 }
 
 #[derive(Clone, Debug)]
@@ -24,16 +22,13 @@ pub enum TokenValue {
     Int(i32),
     String(String),
     Keyword(Keyword),
+    Function(String, Vec<Types>, Vec<Types>),
 }
 
 
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Keyword {
     INCLUDE,
-    If,
-    Do,
-    ElseIf,
-    Else,
     End,
 }
 
@@ -70,13 +65,54 @@ impl From<(Position, String)> for Token {
                 location: str.0,
                 value: TokenValue::Keyword(match str.1.as_ref() {
                     "include" => INCLUDE,
-                    "if" => If,
-                    "do" => Do,
-                    "elif" => ElseIf,
-                    "else" => Else,
                     "end" => End,
                     _ => unreachable!()
                 }),
+            }
+        } else if str.1.starts_with("@") && str.1.ends_with(")") {
+            let mut token = str.1.clone();
+            let token_raw = token.clone();
+            token.remove(0);
+            token.remove(token.len() - 1);
+
+            if token.matches("(").count() != 1 {
+                compiler_error(format!("Invalid function declaration. Function name cant contain '('. Got function decleration: {}", str.clone().1), str.clone().0);
+            }
+
+            let parts = token.split_once("(").unwrap();
+            let name = parts.0.to_string();
+
+            let params = parts.1.to_string();
+            let params = params.replace(")", "");
+
+            let (input, output, _) = if params.len() > 0 {
+                parts.1.split("->").map(|part| part.split(",").filter(|sub_part| {
+                    sub_part.len() > 0
+                }).map(|sub_part| {
+                    Types::from((str.clone().0, sub_part.to_string()))
+                }).collect::<Vec<Types>>()).fold((vec![], vec![], 0), |acc, typ| {
+                    if acc.2 == 1 {
+                        let mut outp = vec![];
+                        outp.extend(typ);
+                        (acc.0, outp, 2)
+                    } else if acc.2 == 0 {
+                        let mut inp = vec![];
+                        inp.extend(typ);
+                        (inp, vec![], 1)
+                    } else {
+                        compiler_error_str("Only one pipe operator allowed in function input/output declearation", str.clone().0);
+                        unreachable!()
+                    }
+                })
+            } else {
+                (vec![], vec![], 0)
+            };
+
+            Self {
+                typ: TokenType::Function,
+                text: token_raw,
+                location: str.0,
+                value: TokenValue::Function(name, input, output),
             }
         } else if str.1.starts_with("\"") && str.1.ends_with("\"") {
             let local = str.clone().1.chars().fold(String::new(), |mut acc, char| {
