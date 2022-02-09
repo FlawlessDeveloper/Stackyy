@@ -240,10 +240,28 @@ impl VM {
                             if let RegisterType::Int(top) = top {
                                 if let RegisterType::Int(bottom) = bottom {
                                     if bottom == 0 {
-                                        runtime_error_str("Divison by 0 is undefinde", position.clone());
+                                        runtime_error_str("Divison by 0 is undefined", position.clone());
                                     }
 
                                     self.stack.push(RegisterType::Int(top / bottom))
+                                } else {
+                                    runtime_error_str("Usage of invalid types", position.clone());
+                                }
+                            } else {
+                                runtime_error_str("Usage of invalid types", position.clone());
+                            }
+                        }
+                        Internal::Modulo => {
+                            if self.stack.len() < 2 {
+                                runtime_error_str("To few elements on stack", position.clone());
+                            }
+
+                            let top = self.stack.pop().unwrap();
+                            let bottom = self.stack.pop().unwrap();
+
+                            if let RegisterType::Int(top) = top {
+                                if let RegisterType::Int(bottom) = bottom {
+                                    self.stack.push(RegisterType::Int(top % bottom))
                                 } else {
                                     runtime_error_str("Usage of invalid types", position.clone());
                                 }

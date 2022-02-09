@@ -1,9 +1,9 @@
 use crate::util::{compiler_error, compiler_error_str};
-use crate::util::internals::Internal::{Cubed, DbgStack, Div, Drop, DropStack, Dup, DupStack, Equals, Larger, LargerEq, Minus, Mult, NoOp, Plus, Print, PrintLn, RevStack, Smaller, SmallerEq, Squared, Swap};
+use crate::util::internals::Internal::{Cubed, DbgStack, Div, Drop, DropStack, Dup, DupStack, Equals, Larger, LargerEq, Minus, Modulo, Mult, NoOp, Plus, Print, PrintLn, RevStack, Smaller, SmallerEq, Squared, Swap};
 use crate::util::position::Position;
 use crate::util::token::TokenValue;
 
-static INTERNALS: [&str; 21] = [
+static INTERNALS: [&str; 22] = [
     "noop",
     "print",
     "println",
@@ -18,6 +18,7 @@ static INTERNALS: [&str; 21] = [
     "-",
     "*",
     "/",
+    "%",
     "squared",
     "cubed",
     "=",
@@ -43,6 +44,7 @@ pub enum Internal {
     Minus,
     Mult,
     Div,
+    Modulo,
     Squared,
     Cubed,
     Equals,
@@ -72,6 +74,7 @@ pub fn to_internal(str: &TokenValue, pos: Position) -> Internal {
                 "-" => Minus,
                 "*" => Mult,
                 "/" => Div,
+                "%" => Modulo,
                 "squared" => Squared,
                 "cubed" => Cubed,
                 "=" => Equals,
