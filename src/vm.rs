@@ -240,7 +240,7 @@ impl VM {
                             if let RegisterType::Int(top) = top {
                                 if let RegisterType::Int(bottom) = bottom {
                                     if bottom == 0 {
-                                        runtime_error_str("Divison by 0 is undefinde");
+                                        runtime_error_str("Divison by 0 is undefinde", position.clone());
                                     }
 
                                     self.stack.push(RegisterType::Int(top / bottom))
