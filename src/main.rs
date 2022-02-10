@@ -13,6 +13,7 @@ use clap::Parser;
 use crate::args::{Action, Args};
 use crate::parser::{pre_parse, tokenize};
 use crate::util::{compiler_error, compiler_error_str};
+use crate::util::position::Position;
 use crate::vm::VM;
 
 pub mod args;
@@ -21,11 +22,15 @@ pub mod util;
 pub mod vm;
 
 fn main() {
-    std::panic::set_hook(Box::new( |panic_info| {
+    std::panic::set_hook(Box::new(|panic_info| {
         eprintln!("----- Error -----");
-        let current_backtrace = Backtrace::new();
-        eprintln!("Backtrace");
-        eprintln!("{:?}", current_backtrace);
+        if cfg!(debug_assertions) {
+            let current_backtrace = Backtrace::new();
+            eprintln!("Backtrace");
+            eprintln!("{:?}", current_backtrace);
+        } else {
+            eprintln!("Backtrace removed. Run in debug mode to show")
+        }
         eprintln!("{:?}", panic_info.message().ok_or_else(|| {}).map_err(|_| "No message provided").unwrap());
         eprintln!("----- Error -----");
     }));
@@ -67,7 +72,7 @@ fn main() {
                 checked.unwrap().run();
             } else {
                 let error = checked.err().unwrap();
-                compiler_error(format!("Type check failed: {}", error.1), error.0)
+                compiler_error(format!("Type check failed: {}", error), Position::default())
             }
         }
         Action::Interpret | Action::Info => {
