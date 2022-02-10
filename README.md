@@ -17,10 +17,11 @@ Stackyy is a stack based, virtual machine language inspired by
 
 - [x] Parsing completed
 - [x] Basic language features
-- [ ] Control flow (e.g. if while etc.)
+- [x] Type checking
+- [x] Control flow (e.g. if while etc.)
+- [x] Functions
 - [ ] Compiling to byte code and running
 - [ ] Included libraries (e.g. processes, io etc.)
-- [ ] Functions
 ### Maybe
 - [ ] Compile to ELF
 - [ ] Self-hosted
