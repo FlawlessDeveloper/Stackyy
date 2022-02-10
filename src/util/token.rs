@@ -1,7 +1,7 @@
 use crate::util::{compiler_error, compiler_error_str, compiler_warning};
 use crate::util::position::Position;
 use crate::util::token::Keyword::{End, INCLUDE};
-use crate::util::types::Types;
+use crate::util::type_check::Types;
 
 static KEYWORDS: [&'static str; 2] = [
     "include",
@@ -85,27 +85,31 @@ impl From<(Position, String)> for Token {
             let params = parts.1.to_string();
             let params = params.replace(")", "");
 
-            let (input, output, _) = if params.len() > 0 {
-                parts.1.split("->").map(|part| part.split(",").filter(|sub_part| {
-                    sub_part.len() > 0
-                }).map(|sub_part| {
-                    Types::from((str.clone().0, sub_part.to_string()))
-                }).collect::<Vec<Types>>()).fold((vec![], vec![], 0), |acc, typ| {
-                    if acc.2 == 1 {
-                        let mut outp = vec![];
-                        outp.extend(typ);
-                        (acc.0, outp, 2)
-                    } else if acc.2 == 0 {
-                        let mut inp = vec![];
-                        inp.extend(typ);
-                        (inp, vec![], 1)
-                    } else {
-                        compiler_error_str("Only one pipe operator allowed in function input/output declearation", str.clone().0);
-                        unreachable!()
-                    }
-                })
+            let (input, output) = if params.len() > 0 {
+                let parts = parts.1.split("->").collect::<Vec<&str>>();
+
+                if parts.len() != 2 {
+                    compiler_error(format!("Function {} can only have input & output", name.clone()), str.clone().0);
+                }
+
+                let input = parts.get(0).unwrap().to_string();
+                let output = parts.get(1).unwrap().to_string();
+
+                let input = if input.len() > 0 {
+                    input.split(",").map(|inp| Types::from((str.clone().0, inp.to_string()))).collect::<Vec<Types>>()
+                } else {
+                    vec![]
+                };
+
+                let output = if output.len() > 0 {
+                    output.split(",").map(|inp| Types::from((str.clone().0, inp.to_string()))).collect::<Vec<Types>>()
+                } else {
+                    vec![]
+                };
+
+                (input, output)
             } else {
-                (vec![], vec![], 0)
+                (vec![], vec![])
             };
 
             Self {
