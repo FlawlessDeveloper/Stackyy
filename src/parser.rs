@@ -10,13 +10,32 @@ use crate::util::internals::{Internal, to_internal};
 use crate::util::operation::{JumpOffset, Operand, Operation, OperationType};
 use crate::util::position::Position;
 use crate::util::token::*;
-use crate::util::types::Types;
+use crate::util::type_check::Types;
 use crate::VM;
+use crate::vm::MAX_CALL_STACK_SIZE;
 
 #[derive(Debug, Clone)]
 pub struct Function {
     data: (String, Vec<Types>, Vec<Types>),
     pub(crate) operations: Vec<(Position, Operation)>,
+}
+
+impl Function {
+    pub fn get_contract(&self) -> (Vec<Types>, Vec<Types>) {
+        (self.data.1.clone(), self.data.2.clone())
+    }
+
+    pub fn type_check(&self, functions: HashMap<String, (Vec<Types>, Vec<Types>)>, stack: &mut Vec<Types>) -> bool {
+        self.operations.iter()
+            .map(|op| op.1.clone())
+            .fold(true, |acc, op| {
+                if !op.type_check(functions.clone(), stack) {
+                    false
+                } else {
+                    acc
+                }
+            })
+    }
 }
 
 pub struct State {
@@ -143,13 +162,9 @@ impl State {
                                 }]
                             } else if self.operations.contains_key(&text) {
                                 vec![Operation {
-                                    typ: OperationType::PushFunction,
-                                    token: token.clone(),
-                                    operand: Some(Operand::Str(text)),
-                                }, Operation {
                                     typ: OperationType::Call,
                                     token,
-                                    operand: None,
+                                    operand: Some(Operand::Call(text)),
                                 }]
                             } else {
                                 let internal = to_internal(value, pos.clone());
@@ -232,7 +247,23 @@ impl State {
         }
     }
 
-    pub fn type_check(self) -> Result<VM, (Position, String)> {
+    pub fn type_check(self) -> Result<VM, String> {
+        for (name, function) in self.operations.clone() {
+            let mut stack = function.get_contract().0;
+
+            if !function.type_check(self.operations.iter().map(|op| (op.0, op.1.get_contract())).fold(HashMap::new(), |mut acc, op| {
+                acc.insert(op.clone().0.clone(), op.1.clone());
+                acc
+            }), &mut stack) {
+                return Err(format!("Function {} failed type check", name));
+            }
+
+            if stack != function.get_contract().1 {
+                return Err(format!("Function {} failed type check! You still have elements left", name));
+            }
+        }
+
+
         Ok(VM::from(self))
     }
 

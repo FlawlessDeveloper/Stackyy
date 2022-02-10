@@ -5,7 +5,7 @@ pub mod token;
 pub mod operation;
 pub mod internals;
 pub mod register_type;
-pub mod types;
+pub mod type_check;
 
 pub fn compiler_error(msg: String, pos: Position) {
     panic!("ERROR at {} -> {}", pos, msg);
