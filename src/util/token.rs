@@ -1,12 +1,17 @@
+use std::collections::HashMap;
+use std::lazy::SyncLazy;
+
 use crate::util::{compiler_error, compiler_error_str, compiler_warning};
 use crate::util::position::Position;
 use crate::util::token::Keyword::{End, INCLUDE};
 use crate::util::type_check::Types;
 
-static KEYWORDS: [&'static str; 2] = [
-    "include",
-    "end"
-];
+static KEY_WORD_MAP: SyncLazy<HashMap<String, Keyword>> = SyncLazy::new(|| {
+    let mut map = HashMap::new();
+    map.insert("include".to_string(), INCLUDE);
+    map.insert("end".to_string(), End);
+    map
+});
 
 #[derive(Clone, Debug)]
 pub enum TokenType {
@@ -58,16 +63,12 @@ impl Token {
 
 impl From<(Position, String)> for Token {
     fn from(str: (Position, String)) -> Self {
-        if KEYWORDS.contains(&str.1.as_str()) {
+        if KEY_WORD_MAP.contains_key(&str.1) {
             Self {
                 typ: TokenType::Keyword,
                 text: str.clone().1,
                 location: str.0,
-                value: TokenValue::Keyword(match str.1.as_ref() {
-                    "include" => INCLUDE,
-                    "end" => End,
-                    _ => unreachable!()
-                }),
+                value: TokenValue::Keyword(KEY_WORD_MAP.get(&str.1).unwrap().clone()),
             }
         } else if str.1.starts_with("@") && str.1.ends_with(")") {
             let mut token = str.1.clone();

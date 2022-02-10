@@ -1,35 +1,42 @@
+use std::collections::HashMap;
+use std::lazy::SyncLazy;
+
 use crate::util::{compiler_error, compiler_error_str};
 use crate::util::internals::Internal::{Cubed, DbgStack, Div, Drop, DropStack, Dup, DupStack, Equals, Larger, LargerEq, Minus, Modulo, Mult, NoOp, Not, NotPeek, Plus, Print, PrintLn, RevStack, Smaller, SmallerEq, Squared, Swap};
 use crate::util::position::Position;
 use crate::util::token::TokenValue;
-use crate::util::type_check::{Takes, Types};
+use crate::util::type_check::Types;
 
-static INTERNALS: [&str; 24] = [
-    "noop",
-    "print",
-    "println",
-    "swap",
-    "drop",
-    "dup",
-    "rev_stack",
-    "drop_stack",
-    "dup_stack",
-    "dbg_stack",
-    "+",
-    "-",
-    "*",
-    "/",
-    "%",
-    "squared",
-    "cubed",
-    "!",
-    "@!",
-    "=",
-    "<",
-    ">",
-    "<=",
-    ">=",
-];
+static INTERNALS_MAP: SyncLazy<HashMap<String, Internal>> = SyncLazy::new(|| {
+    let mut map = HashMap::new();
+    map.insert("noop".to_string(), NoOp);
+    map.insert("print".to_string(), Print);
+    map.insert("println".to_string(), PrintLn);
+    map.insert("swap".to_string(), Swap);
+    map.insert("drop".to_string(), Drop);
+    map.insert("swap".to_string(), Swap);
+    map.insert("dup".to_string(), Dup);
+    map.insert("rev_stack".to_string(), RevStack);
+    map.insert("drop_stack".to_string(), DropStack);
+    map.insert("dup_stack".to_string(), DupStack);
+    map.insert("dbg_stack".to_string(), DbgStack);
+    map.insert("!".to_string(), Not);
+    map.insert("@!".to_string(), NotPeek);
+    map.insert("+".to_string(), Plus);
+    map.insert("-".to_string(), Minus);
+    map.insert("*".to_string(), Mult);
+    map.insert("/".to_string(), Div);
+    map.insert("%".to_string(), Modulo);
+    map.insert("squared".to_string(), Squared);
+    map.insert("cubed".to_string(), Cubed);
+    map.insert("=".to_string(), Equals);
+    map.insert("<".to_string(), Larger);
+    map.insert(">".to_string(), Smaller);
+    map.insert("<=".to_string(), LargerEq);
+    map.insert(">=".to_string(), SmallerEq);
+    map
+});
+
 
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Internal {
@@ -61,38 +68,8 @@ pub enum Internal {
 
 pub fn to_internal(str: &TokenValue, pos: Position) -> Internal {
     if let TokenValue::String(str) = str {
-        if INTERNALS.contains(&str.as_str()) {
-            match str.as_str() {
-                "noop" => NoOp,
-                "print" => Print,
-                "println" => PrintLn,
-                "swap" => Swap,
-                "drop" => Drop,
-                "swap" => Swap,
-                "dup" => Dup,
-                "rev_stack" => RevStack,
-                "drop_stack" => DropStack,
-                "dup_stack" => DupStack,
-                "dbg_stack" => DbgStack,
-                "!" => Not,
-                "@!" => NotPeek,
-                "+" => Plus,
-                "-" => Minus,
-                "*" => Mult,
-                "/" => Div,
-                "%" => Modulo,
-                "squared" => Squared,
-                "cubed" => Cubed,
-                "=" => Equals,
-                "<" => Larger,
-                ">" => Smaller,
-                "<=" => LargerEq,
-                ">=" => SmallerEq,
-                _ => {
-                    compiler_error(format!("The internal call {} is not implemented", str), pos);
-                    unreachable!()
-                }
-            }
+        if INTERNALS_MAP.contains_key(str) {
+            INTERNALS_MAP.get(str).unwrap().clone()
         } else {
             compiler_error(format!("The internal call {} does not exit", str), pos);
             unreachable!()

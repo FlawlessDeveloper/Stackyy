@@ -1,5 +1,6 @@
 #![feature(panic_info_message)]
 #![feature(trusted_random_access)]
+#![feature(once_cell)]
 
 use std::fmt::Arguments;
 use std::fs::OpenOptions;
