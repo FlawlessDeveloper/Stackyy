@@ -52,7 +52,6 @@ pub enum Internal {
     Smaller,
     LargerEq,
     SmallerEq,
-    _IfStarts,
 }
 
 pub fn to_internal(str: &TokenValue, pos: Position) -> Internal {
