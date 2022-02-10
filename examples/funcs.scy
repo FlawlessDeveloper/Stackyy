@@ -1,0 +1,10 @@
+@greet(str->)
+    "Hello " print println
+end
+
+@main(->int)
+    "World" greet
+    "Flawlesscode" greet
+
+    0
+end

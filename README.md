@@ -18,24 +18,16 @@ Stackyy is a stack based, virtual machine language inspired by
 - [x] Parsing completed
 - [x] Basic language features
 - [x] Type checking
-- [x] Control flow (e.g. if while etc.)
+- [x] Control flow (e.g. if while etc.) (Implemented via conditional functions])
 - [x] Functions
-- [ ] Compiling to byte code and running
 - [ ] Included libraries (e.g. processes, io etc.)
+- [ ] Speed up parsing
+- [ ] Reflection (creating function handles from scratch)
+- [ ] Compiling to byte code and running
 ### Maybe
 - [ ] Compile to ELF
 - [ ] Self-hosted
 
 ## Example programs:
 
-Hello world:
-
-```shell
-"Hello world" println
-```
-
-Stack manipulation
-
-```shell
-"x2" dup println println
-```
+For example programs look in the examples directory

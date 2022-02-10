@@ -1,0 +1,4 @@
+@main(->int)
+    "Hello world" println
+    0
+end
