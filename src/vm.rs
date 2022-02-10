@@ -10,6 +10,8 @@ use crate::util::position::Position;
 use crate::util::register_type::RegisterType;
 use crate::vm;
 
+pub const MAX_CALL_STACK_SIZE: u8 = 40;
+
 pub struct VM {
     ip: i32,
     ops: HashMap<String, Function>,
@@ -73,7 +75,7 @@ impl VM {
     fn execute_op(&mut self, op: (Position, Operation), depth: u8) {
         let position = op.0;
         let operation = op.1;
-        if depth > 40 {
+        if depth > MAX_CALL_STACK_SIZE {
             runtime_error_str("Stack overflow", position.clone());
         }
         match operation.typ {
@@ -366,20 +368,30 @@ impl VM {
             }
             OperationType::Call => {
                 if self.stack.len() == 0 {
-                    runtime_error_str("To few elements on stack", position.clone());
-                }
+                    if let Operand::Call(fnc) = operation.operand.unwrap() {
+                        if !self.ops.contains_key(&fnc) {
+                            runtime_error(format!("Function: {} does not exist", fnc), position.clone());
+                        }
 
-                let top = self.stack.pop().unwrap();
+                        let fnc = self.ops.get(&fnc).unwrap().clone();
 
-                if let RegisterType::Function(fnc) = top {
-                    if !self.ops.contains_key(&fnc) {
-                        runtime_error(format!("Function: {} does not exist", fnc), position.clone());
+                        for operation in fnc.operations {
+                            self.execute_op(operation, depth + 1);
+                        }
                     }
+                } else {
+                    let top = self.stack.pop().unwrap();
 
-                    let fnc = self.ops.get(&fnc).unwrap().clone();
+                    if let RegisterType::Function(fnc) = top {
+                        if !self.ops.contains_key(&fnc) {
+                            runtime_error(format!("Function: {} does not exist", fnc), position.clone());
+                        }
 
-                    for operation in fnc.operations {
-                        self.execute_op(operation, depth + 1);
+                        let fnc = self.ops.get(&fnc).unwrap().clone();
+
+                        for operation in fnc.operations {
+                            self.execute_op(operation, depth + 1);
+                        }
                     }
                 }
             }
