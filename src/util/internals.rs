@@ -1,10 +1,10 @@
 use crate::util::{compiler_error, compiler_error_str};
-use crate::util::internals::Internal::{Cubed, DbgStack, Div, Drop, DropStack, Dup, DupStack, Equals, Larger, LargerEq, Minus, Modulo, Mult, NoOp, Plus, Print, PrintLn, RevStack, Smaller, SmallerEq, Squared, Swap};
+use crate::util::internals::Internal::{Cubed, DbgStack, Div, Drop, DropStack, Dup, DupStack, Equals, Larger, LargerEq, Minus, Modulo, Mult, NoOp, Not, NotPeek, Plus, Print, PrintLn, RevStack, Smaller, SmallerEq, Squared, Swap};
 use crate::util::position::Position;
 use crate::util::token::TokenValue;
 use crate::util::type_check::{Takes, Types};
 
-static INTERNALS: [&str; 22] = [
+static INTERNALS: [&str; 24] = [
     "noop",
     "print",
     "println",
@@ -22,6 +22,8 @@ static INTERNALS: [&str; 22] = [
     "%",
     "squared",
     "cubed",
+    "!",
+    "@!",
     "=",
     "<",
     ">",
@@ -48,6 +50,8 @@ pub enum Internal {
     Modulo,
     Squared,
     Cubed,
+    Not,
+    NotPeek,
     Equals,
     Larger,
     Smaller,
@@ -70,6 +74,8 @@ pub fn to_internal(str: &TokenValue, pos: Position) -> Internal {
                 "drop_stack" => DropStack,
                 "dup_stack" => DupStack,
                 "dbg_stack" => DbgStack,
+                "!" => Not,
+                "@!" => NotPeek,
                 "+" => Plus,
                 "-" => Minus,
                 "*" => Mult,
@@ -171,6 +177,23 @@ pub fn type_check(int: Internal, stack: &mut Vec<Types>) -> bool {
             } else {
                 let last = stack.last().unwrap().clone();
                 if last == Types::Int {
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+        Not | NotPeek => {
+            if stack.len() == 0 {
+                false
+            } else {
+                let last = if int == Internal::Not {
+                    stack.pop().unwrap().clone()
+                } else {
+                    stack.last().unwrap().clone()
+                };
+                if last == Types::Bool {
+                    stack.push(Types::Bool);
                     true
                 } else {
                     false

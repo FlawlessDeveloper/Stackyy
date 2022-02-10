@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::collections::HashMap;
+use std::io::{stdout, Write};
 use std::process::exit;
 
 use crate::parser::{Function, State};
@@ -136,6 +137,8 @@ impl VM {
 
                             if int == Internal::PrintLn {
                                 println!();
+                            } else {
+                                stdout().flush().unwrap();
                             }
                         }
                         Internal::Swap => {
@@ -293,6 +296,32 @@ impl VM {
 
                             if let RegisterType::Int(top) = top {
                                 self.stack.push(RegisterType::Int(top * top * top))
+                            } else {
+                                runtime_error_str("Usage of invalid types", position.clone());
+                            }
+                        }
+                        Internal::Not => {
+                            if self.stack.len() < 1 {
+                                runtime_error_str("To few elements on stack", position.clone());
+                            }
+
+                            let top = self.stack.pop().unwrap();
+
+                            if let RegisterType::Bool(top) = top {
+                                self.stack.push(RegisterType::Bool(!top))
+                            } else {
+                                runtime_error_str("Usage of invalid types", position.clone());
+                            }
+                        }
+                        Internal::NotPeek => {
+                            if self.stack.len() < 1 {
+                                runtime_error_str("To few elements on stack", position.clone());
+                            }
+
+                            let top = self.stack.last().unwrap();
+
+                            if let RegisterType::Bool(top) = top {
+                                self.stack.push(RegisterType::Bool(!*top))
                             } else {
                                 runtime_error_str("Usage of invalid types", position.clone());
                             }
