@@ -396,11 +396,29 @@ impl VM {
                 }
             }
             OperationType::Call => {
-                if self.stack.len() == 0 {
+                if operation.operand.is_some() {
                     if let Operand::Call(fnc) = operation.operand.unwrap() {
                         if !self.ops.contains_key(&fnc) {
                             runtime_error(format!("Function: {} does not exist", fnc), position.clone());
                         }
+
+
+                        let fnc = self.ops.get(&fnc).unwrap().clone();
+
+                        for operation in fnc.operations {
+                            self.execute_op(operation, depth + 1);
+                        }
+                    }
+                } else if self.stack.len() != 0 {
+                    let top = self.stack.pop().unwrap();
+
+                    if let RegisterType::Function(fnc) = top {
+                        println!("hmmmmm");
+                        if !self.ops.contains_key(&fnc) {
+                            runtime_error(format!("Function: {} does not exist", fnc), position.clone());
+                        }
+
+                        runtime_warning_str("Runtime generated function pointers are not safe yet", position.clone());
 
                         let fnc = self.ops.get(&fnc).unwrap().clone();
 
@@ -409,19 +427,7 @@ impl VM {
                         }
                     }
                 } else {
-                    let top = self.stack.pop().unwrap();
-
-                    if let RegisterType::Function(fnc) = top {
-                        if !self.ops.contains_key(&fnc) {
-                            runtime_error(format!("Function: {} does not exist", fnc), position.clone());
-                        }
-
-                        let fnc = self.ops.get(&fnc).unwrap().clone();
-
-                        for operation in fnc.operations {
-                            self.execute_op(operation, depth + 1);
-                        }
-                    }
+                    runtime_error_str("Invalid call operation", position.clone());
                 }
             }
             OperationType::Jump => {
