@@ -225,7 +225,7 @@ pub fn type_check(int: Internal, stack: &mut Vec<Types>) -> bool {
                 let a = stack.pop().unwrap();
                 let b = stack.pop().unwrap();
 
-                if allowed_types.contains(&a) && allowed_types.contains(&b) {
+                if ALLOWED_TYPES.contains(&a) && ALLOWED_TYPES.contains(&b) {
                     stack.push(Types::Bool);
                     true
                 } else {
