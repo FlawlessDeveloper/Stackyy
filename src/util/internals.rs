@@ -12,16 +12,30 @@ static INTERNALS_MAP: SyncLazy<HashMap<String, Internal>> = SyncLazy::new(|| {
     map.insert("noop".to_string(), NoOp);
     map.insert("print".to_string(), Print);
     map.insert("println".to_string(), PrintLn);
+    map
+});
+
+
+static _INTERNALS_MAP: SyncLazy<HashMap<String, Internal>> = SyncLazy::new(|| {
+    let mut map = HashMap::new();
+    map
+});
+
+static STACK_OPS_INTERNALS_MAP: SyncLazy<HashMap<String, Internal>> = SyncLazy::new(|| {
+    let mut map = HashMap::new();
     map.insert("swap".to_string(), Swap);
     map.insert("drop".to_string(), Drop);
     map.insert("swap".to_string(), Swap);
     map.insert("dup".to_string(), Dup);
-    map.insert("rev_stack".to_string(), RevStack);
-    map.insert("drop_stack".to_string(), DropStack);
-    map.insert("dup_stack".to_string(), DupStack);
-    map.insert("dbg_stack".to_string(), DbgStack);
-    map.insert("!".to_string(), Not);
-    map.insert("@!".to_string(), NotPeek);
+    map.insert("rev-stack".to_string(), RevStack);
+    map.insert("drop-stack".to_string(), DropStack);
+    map.insert("dup-stack".to_string(), DupStack);
+    map.insert("dbg-stack".to_string(), DbgStack);
+    map
+});
+
+static BASIC_MATH_INTERNALS_MAP: SyncLazy<HashMap<String, Internal>> = SyncLazy::new(|| {
+    let mut map = HashMap::new();
     map.insert("+".to_string(), Plus);
     map.insert("-".to_string(), Minus);
     map.insert("*".to_string(), Mult);
@@ -29,11 +43,26 @@ static INTERNALS_MAP: SyncLazy<HashMap<String, Internal>> = SyncLazy::new(|| {
     map.insert("%".to_string(), Modulo);
     map.insert("squared".to_string(), Squared);
     map.insert("cubed".to_string(), Cubed);
+    map
+});
+
+static BOOL_INTERNALS_MAP: SyncLazy<HashMap<String, Internal>> = SyncLazy::new(|| {
+    let mut map = HashMap::new();
+    map.insert("!".to_string(), Not);
+    map.insert("@!".to_string(), NotPeek);
     map.insert("=".to_string(), Equals);
     map.insert("<".to_string(), Larger);
     map.insert(">".to_string(), Smaller);
     map.insert("<=".to_string(), LargerEq);
     map.insert(">=".to_string(), SmallerEq);
+    map
+});
+
+static INCLUDE_MAP: SyncLazy<HashMap<String, HashMap<String, Internal>>> = SyncLazy::new(|| {
+    let mut map = HashMap::new();
+    map.insert("std/bool".to_string(), BOOL_INTERNALS_MAP.clone());
+    map.insert("std/simple-maths".to_string(), BASIC_MATH_INTERNALS_MAP.clone());
+    map.insert("std/stack-ops".to_string(), STACK_OPS_INTERNALS_MAP.clone());
     map
 });
 
@@ -66,12 +95,22 @@ pub enum Internal {
     SmallerEq,
 }
 
-pub fn to_internal(str: &TokenValue, pos: Position) -> Internal {
+pub fn to_internal(includes: Vec<String>, str: &TokenValue, pos: Position) -> Internal {
     if let TokenValue::String(str) = str {
-        if INTERNALS_MAP.contains_key(str) {
-            INTERNALS_MAP.get(str).unwrap().clone()
+        let ops = includes.iter().fold(INTERNALS_MAP.clone(), |mut acc, include| {
+            if let Some(include) = INCLUDE_MAP.get(include) {
+                acc.extend(include.clone())
+            } else {
+                compiler_error(format!("The system lib: {} was not found", include), pos.clone());
+                unreachable!();
+            }
+            acc
+        });
+
+        if let Some(op) = ops.get(str) {
+            op.clone()
         } else {
-            compiler_error(format!("The internal call {} does not exit", str), pos);
+            compiler_error(format!("The internal call {} does not exit or is not included", str), pos);
             unreachable!()
         }
     } else {

@@ -5,6 +5,9 @@ use std::iter::TrustedRandomAccessNoCoerce;
 use std::os::linux::raw::stat;
 use std::path::{Path, PathBuf};
 
+use rayon::iter::ParallelIterator;
+use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator};
+
 use crate::util::{compiler_error, compiler_error_str};
 use crate::util::internals::{Internal, to_internal};
 use crate::util::operation::{JumpOffset, Operand, Operation, OperationType};
@@ -42,6 +45,7 @@ pub struct State {
     operations: HashMap<String, Function>,
     included: bool,
     path: PathBuf,
+    sys_libs: Vec<String>,
     in_fn: Option<Function>,
 }
 
@@ -51,6 +55,7 @@ impl State {
             operations: HashMap::new(),
             included: false,
             in_fn: None,
+            sys_libs: vec![],
             path,
         }
     }
@@ -60,6 +65,7 @@ impl State {
             operations: HashMap::new(),
             included: true,
             in_fn: None,
+            sys_libs: vec![],
             path,
         }
     }
@@ -93,26 +99,31 @@ impl State {
 
                                         let path = path.unwrap();
 
-                                        if let TokenValue::String(s_path) = path.1.value().clone() {
-                                            let mut incl_path = self.path.clone();
-                                            incl_path.push(s_path);
+                                        if let TokenValue::String(mut s_path) = path.1.value().clone() {
+                                            if s_path.starts_with("@") {
+                                                s_path.remove(0);
+                                                self.sys_libs.push(s_path);
+                                            } else {
+                                                let mut incl_path = self.path.clone();
+                                                incl_path.push(s_path);
 
-                                            let file = OpenOptions::new().read(true).open(&incl_path);
-                                            if file.is_err() {
-                                                compiler_error(format!("The file {:?} could not be found", incl_path), pos.clone());
+                                                let file = OpenOptions::new().read(true).open(&incl_path);
+                                                if file.is_err() {
+                                                    compiler_error(format!("The file {:?} could not be found", incl_path), pos.clone());
+                                                }
+
+                                                let mut string = String::new();
+
+                                                let mut file = file.unwrap();
+                                                if file.read_to_string(&mut string).is_err() {
+                                                    compiler_error(format!("The file {:?} could not be read from", incl_path), pos.clone());
+                                                }
+
+                                                let parsed = pre_parse(string, incl_path.clone(), incl_path.parent().unwrap().to_path_buf());
+                                                let state = tokenize(parsed, true, incl_path.parent().unwrap().to_path_buf());
+
+                                                self.operations.extend(state.operations);
                                             }
-
-                                            let mut string = String::new();
-
-                                            let mut file = file.unwrap();
-                                            if file.read_to_string(&mut string).is_err() {
-                                                compiler_error(format!("The file {:?} could not be read from", incl_path), pos.clone());
-                                            }
-
-                                            let parsed = pre_parse(string, incl_path.clone(), incl_path.parent().unwrap().to_path_buf());
-                                            let state = tokenize(parsed, true, incl_path.parent().unwrap().to_path_buf());
-
-                                            self.operations.extend(state.operations);
                                         } else {
                                             compiler_error(format!("No string passed to include. Found: {:?}", path.1.value()), pos.clone());
                                             unreachable!()
@@ -139,6 +150,7 @@ impl State {
                         }
                     }
                 } else {
+                    let sys_libs = self.sys_libs.clone();
                     let mut function = self.in_fn.clone().unwrap();
                     let to_add = match token.typ() {
                         TokenType::Word => {
@@ -167,7 +179,7 @@ impl State {
                                     operand: Some(Operand::Call(text)),
                                 }]
                             } else {
-                                let internal = to_internal(value, pos.clone());
+                                let internal = to_internal(sys_libs, value, pos.clone());
                                 vec![Operation {
                                     typ: OperationType::Internal,
                                     token,
@@ -278,7 +290,7 @@ pub fn pre_parse(string: String, file: PathBuf, path: PathBuf) -> Vec<(Position,
         count
     });
 
-    let (unclosed, pos, _, lines): (bool, Position, String, Vec<(Position, String)>) = lines.iter()
+    let (unclosed, pos, _, lines): (bool, Position, String, Vec<(Position, String)>) = lines.into_par_iter()
         .filter(|line| line.1.len() > 0)
         .map(|line| {
             if !line.1.contains("//") {
@@ -309,7 +321,8 @@ pub fn pre_parse(string: String, file: PathBuf, path: PathBuf) -> Vec<(Position,
                     file: file.clone(),
                 }, token.clone().1)
             }).collect::<Vec<(Position, String)>>()
-        })
+        }).collect::<Vec<(Position, String)>>()
+        .iter()
         .fold((false, Position::default(), String::new(), vec![]), |collect, line| {
             let mut change = collect.0;
             let mut position = collect.1;
@@ -327,9 +340,9 @@ pub fn pre_parse(string: String, file: PathBuf, path: PathBuf) -> Vec<(Position,
                         change = true;
                         append.push_str(&line_string);
                         append.push_str(" ");
-                        position = line.0;
+                        position = line.clone().0;
                     } else {
-                        vec.push(line);
+                        vec.push(line.clone());
                     }
                 } else {
                     if line_string.ends_with("\"") {
@@ -345,14 +358,16 @@ pub fn pre_parse(string: String, file: PathBuf, path: PathBuf) -> Vec<(Position,
                 };
             }
 
-            (change, position, append, vec)
+            let ret = (change, position, append, vec);
+
+            ret
         });
 
     if unclosed {
         compiler_error_str("Unclosed string sequence", pos);
     }
 
-    let lines = lines.iter()
+    let lines = lines.par_iter()
         .filter(|line| line.1.len() > 0)
         .map(|line| line.clone())
         .collect();
@@ -363,7 +378,7 @@ pub fn pre_parse(string: String, file: PathBuf, path: PathBuf) -> Vec<(Position,
 pub fn tokenize(tokens: Vec<(Position, String)>, included: bool, path: PathBuf) -> State {
     let mut state = if included { State::new_with_include(path) } else { State::new(path) };
 
-    state.update(tokens.iter().map(|token| {
+    state.update(tokens.par_iter().map(|token| {
         let token = token.clone();
 
         (token.clone().0, Token::from(token))
