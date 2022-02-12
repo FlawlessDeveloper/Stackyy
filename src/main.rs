@@ -73,7 +73,7 @@ fn main() {
                 checked.unwrap().run();
             } else {
                 let error = checked.err().unwrap();
-                compiler_error(format!("Type check failed: {}", error), Position::default())
+                compiler_error(format!("Type check failed:\r\n\t{}", error), Position::default())
             }
         }
         Action::Interpret | Action::Info => {

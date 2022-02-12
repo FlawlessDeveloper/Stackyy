@@ -3,23 +3,26 @@ use std::lazy::SyncLazy;
 
 use crate::util::{compiler_error, compiler_error_str, compiler_warning};
 use crate::util::position::Position;
-use crate::util::token::Keyword::{End, INCLUDE};
+use crate::util::token::Keyword::{Call, CallIf, End, INCLUDE};
 use crate::util::type_check::Types;
 
 static KEY_WORD_MAP: SyncLazy<HashMap<String, Keyword>> = SyncLazy::new(|| {
     let mut map = HashMap::new();
     map.insert("include".to_string(), INCLUDE);
     map.insert("end".to_string(), End);
+    map.insert("@".to_string(), Call);
+    map.insert("@if".to_string(), CallIf);
     map
 });
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum TokenType {
     Word,
     Int,
     Str,
     Keyword,
     Function,
+    FunctionPtr,
 }
 
 #[derive(Clone, Debug)]
@@ -35,6 +38,8 @@ pub enum TokenValue {
 pub enum Keyword {
     INCLUDE,
     End,
+    Call,
+    CallIf,
 }
 
 
@@ -70,14 +75,21 @@ impl From<(Position, String)> for Token {
                 location: str.0,
                 value: TokenValue::Keyword(KEY_WORD_MAP.get(&str.1).unwrap().clone()),
             }
-        } else if str.1.starts_with("@") && str.1.ends_with(")") {
+        } else if (str.1.starts_with("@") && str.1.ends_with(")")) || (str.1.starts_with("#") && str.1.ends_with(")")) {
+            let is_ptr = str.1.starts_with("#");
+            let typ = if is_ptr {
+                " pointer"
+            } else {
+                ""
+            };
+
             let mut token = str.1.clone();
             let token_raw = token.clone();
             token.remove(0);
             token.remove(token.len() - 1);
 
             if token.matches("(").count() != 1 {
-                compiler_error(format!("Invalid function declaration. Function name cant contain '('. Got function decleration: {}", str.clone().1), str.clone().0);
+                compiler_error(format!("Invalid function{typ} declaration. Function{typ} name cant contain '('. Got function decleration: {}", str.clone().1, typ = typ, ), str.clone().0);
             }
 
             let parts = token.split_once("(").unwrap();
@@ -90,7 +102,7 @@ impl From<(Position, String)> for Token {
                 let parts = parts.1.split("->").collect::<Vec<&str>>();
 
                 if parts.len() != 2 {
-                    compiler_error(format!("Function {} can only have input & output", name.clone()), str.clone().0);
+                    compiler_error(format!("Function{typ} {} can only have input & output", name.clone(), typ = typ), str.clone().0);
                 }
 
                 let input = parts.get(0).unwrap().to_string();
@@ -114,7 +126,11 @@ impl From<(Position, String)> for Token {
             };
 
             Self {
-                typ: TokenType::Function,
+                typ: if is_ptr {
+                    TokenType::FunctionPtr
+                } else {
+                    TokenType::Function
+                },
                 text: token_raw,
                 location: str.0,
                 value: TokenValue::Function(name, input, output),

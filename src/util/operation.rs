@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 
-use crate::compiler_error_str;
+use crate::{compiler_error, compiler_error_str};
+use crate::parser::Function;
 use crate::util::{compiler_warning, compiler_warning_str};
 use crate::util::internals::{Internal, type_check};
 use crate::util::position::Position;
 use crate::util::token::Token;
-use crate::util::type_check::Types;
+use crate::util::type_check::{ErrorTypes, TypeCheckError, Types};
 
 pub type JumpOffset = u32;
 
@@ -30,6 +31,7 @@ pub enum Operand {
     Bool(bool),
     Internal(Internal),
     Jump(JumpOffset),
+    PushFunction(String, Vec<Types>, Vec<Types>),
     Call(String),
 }
 
@@ -41,82 +43,97 @@ pub struct Operation {
 }
 
 impl Operation {
-    pub fn type_check(&self, functions: HashMap<String, (Vec<Types>, Vec<Types>)>, stack: &mut Vec<Types>) -> bool {
+    pub fn type_check(&self, functions: &HashMap<String, Function>, stack: &mut Vec<Types>) -> TypeCheckError {
         match self.typ {
             OperationType::PushInt => {
                 stack.push(Types::Int);
-                true
+                ErrorTypes::None.into()
             }
             OperationType::PushPtr => {
                 stack.push(Types::Pointer);
-                true
+                ErrorTypes::None.into()
             }
             OperationType::PushBool => {
                 stack.push(Types::Bool);
-                true
+                ErrorTypes::None.into()
             }
             OperationType::PushStr => {
                 stack.push(Types::String);
-                true
+                ErrorTypes::None.into()
             }
             OperationType::PushFunction => {
-                stack.push(Types::Function);
-                true
+                if let Operand::PushFunction(_, inp, outp) = self.operand.clone().unwrap() {
+                    stack.push(Types::FunctionPointer(inp, outp));
+                    ErrorTypes::None.into()
+                } else {
+                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Function], stack.clone())
+                }
             }
             OperationType::Internal => {
                 if let Operand::Internal(internal) = self.operand.clone().unwrap() {
                     type_check(internal, stack)
                 } else {
                     compiler_error_str("Parser bug! Internal found without Internal operand", self.token.location().clone());
-                    false
+                    ErrorTypes::Raw("Parser bug! Internal found without Internal operand".to_string()).into()
                 }
             }
             OperationType::Jump | OperationType::JumpIf => {
                 compiler_warning_str("Jumps not implemented yet", self.token.location().clone());
-                false
+                ErrorTypes::Raw("Jumps not implemented yet".to_string()).into()
             }
-            OperationType::Call => {
-                if let Operand::Call(fnc) = self.operand.clone().unwrap() {
-                    if functions.contains_key(&fnc) {
-                        let (contract_in, contract_out) = functions.get(&fnc).unwrap();
-
-                        if stack.len() >= contract_in.len() {
-                            for typ in contract_in {
-                                let typ = typ.clone();
-
-                                let stack_top = stack.pop().unwrap();
-
-                                if typ != stack_top {
-                                    return false;
-                                }
+            OperationType::Call | OperationType::CallIf => {
+                let (success, inp, outp): (TypeCheckError, Vec<Types>, Vec<Types>) = if let Some(inner) = self.operand.clone() {
+                    match inner {
+                        Operand::Call(ref name) | Operand::PushFunction(ref name, _, _) => {
+                            if functions.contains_key(name) {
+                                let (inp, outp) = if let Operand::PushFunction(_, inp, outp) = inner {
+                                    (inp, outp)
+                                } else {
+                                    functions.get(name).unwrap().get_contract()
+                                };
+                                (ErrorTypes::None.into(), inp, outp)
+                            } else {
+                                (ErrorTypes::WrongData.into(), vec![], stack.clone())
                             }
+                        }
+                        _ => {
+                            println!("{:?}", inner);
+                            (ErrorTypes::WrongData.into(), vec![], stack.clone())
+                        }
+                    }
+                } else {
+                    if stack.len() == 0 {
+                        (ErrorTypes::TooFewElements.into_with_ctx_plus(vec![Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], stack.clone(), "Function pointer can contain any amount/sort of types"), vec![], vec![])
+                    } else {
+                        let top = stack.pop().unwrap();
+                        if let Types::FunctionPointer(inp, outp) = top {
+                            (ErrorTypes::None.into(), inp, outp)
+                        } else {
+                            println!("3");
+                            (ErrorTypes::WrongData.into(), vec![], vec![])
+                        }
+                    }
+                };
 
-                            for typ in contract_out {
+                if success.error == ErrorTypes::None {
+                    if stack.len() >= inp.len() {
+                        let mut tmp_stack = stack.clone();
+                        if inp.iter().filter(|required| {
+                            let top = tmp_stack.pop().unwrap();
+                            **required == top
+                        }).count() != 0 {
+                            ErrorTypes::InvalidTypes.into_with_ctx(inp, stack.clone())
+                        } else {
+                            for typ in outp {
                                 stack.push(typ.clone());
                             }
-
-                            true
-                        } else {
-                            false
+                            ErrorTypes::None.into()
                         }
                     } else {
-                        false
+                        ErrorTypes::TooFewElements.into_with_ctx_plus(vec![Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], stack.clone(), "Function pointer can contain any amount/sort of types")
                     }
                 } else {
-                    false
-                }
-            }
-            OperationType::CallIf => {
-                if stack.len() == 0 {
-                    false
-                } else {
-                    let a = stack.pop().unwrap();
-                    let b = stack.pop().unwrap();
-                    if a == Types::Bool && b == Types::Function {
-                        true
-                    } else {
-                        false
-                    }
+                    success
                 }
             }
         }

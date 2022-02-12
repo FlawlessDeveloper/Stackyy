@@ -5,7 +5,7 @@ use crate::util::{compiler_error, compiler_error_str};
 use crate::util::internals::Internal::{Cubed, DbgStack, Div, Drop, DropStack, Dup, DupStack, Equals, Larger, LargerEq, Minus, Modulo, Mult, NoOp, Not, NotPeek, Plus, Print, PrintLn, RevStack, Smaller, SmallerEq, Squared, Swap};
 use crate::util::position::Position;
 use crate::util::token::TokenValue;
-use crate::util::type_check::Types;
+use crate::util::type_check::{ErrorTypes, TypeCheckError, Types};
 
 static INTERNALS_MAP: SyncLazy<HashMap<String, Internal>> = SyncLazy::new(|| {
     let mut map = HashMap::new();
@@ -17,6 +17,11 @@ static INTERNALS_MAP: SyncLazy<HashMap<String, Internal>> = SyncLazy::new(|| {
 
 
 static _INTERNALS_MAP: SyncLazy<HashMap<String, Internal>> = SyncLazy::new(|| {
+    let mut map = HashMap::new();
+    map
+});
+
+static REFLECTION_INTERNALS_MAP: SyncLazy<HashMap<String, Internal>> = SyncLazy::new(|| {
     let mut map = HashMap::new();
     map
 });
@@ -63,6 +68,7 @@ static INCLUDE_MAP: SyncLazy<HashMap<String, HashMap<String, Internal>>> = SyncL
     map.insert("std/bool".to_string(), BOOL_INTERNALS_MAP.clone());
     map.insert("std/simple-maths".to_string(), BASIC_MATH_INTERNALS_MAP.clone());
     map.insert("std/stack-ops".to_string(), STACK_OPS_INTERNALS_MAP.clone());
+    map.insert("std/reflection".to_string(), STACK_OPS_INTERNALS_MAP.clone());
     map
 });
 
@@ -119,89 +125,89 @@ pub fn to_internal(includes: Vec<String>, str: &TokenValue, pos: Position) -> In
     }
 }
 
-pub fn type_check(int: Internal, stack: &mut Vec<Types>) -> bool {
+pub fn type_check(int: Internal, stack: &mut Vec<Types>) -> TypeCheckError {
     match int {
         NoOp | DbgStack => {
-            true
+            ErrorTypes::None.into()
         }
         Print | PrintLn => {
             if stack.len() == 0 {
-                false
+                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Any, Types::Any], stack.clone())
             } else {
                 stack.pop();
-                true
+                ErrorTypes::None.into()
             }
         }
         Swap => {
             if stack.len() < 2 {
-                false
+                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Any, Types::Any], stack.clone())
             } else {
                 let a = stack.pop().unwrap();
                 let b = stack.pop().unwrap();
                 stack.push(a);
                 stack.push(b);
-                true
+                ErrorTypes::None.into()
             }
         }
         Drop => {
             if stack.len() == 0 {
-                false
+                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Any], stack.clone())
             } else {
                 stack.pop();
-                true
+                ErrorTypes::None.into()
             }
         }
         Dup => {
             if stack.len() == 0 {
-                false
+                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Any], stack.clone())
             } else {
                 let last = stack.last().unwrap().clone();
                 stack.push(last);
-                true
+                ErrorTypes::None.into()
             }
         }
         RevStack => {
             stack.reverse();
-            true
+            ErrorTypes::None.into()
         }
         DropStack => {
             stack.clear();
-            true
+            ErrorTypes::None.into()
         }
         DupStack => {
             stack.extend(stack.clone());
-            true
+            ErrorTypes::None.into()
         }
         Plus | Minus | Mult | Div | Modulo => {
             if stack.len() < 2 {
-                false
+                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Int, Types::Int], stack.clone())
             } else {
                 let a = stack.pop().unwrap();
                 let b = stack.pop().unwrap();
 
                 if a != Types::Int || b != Types::Int {
-                    false
+                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Int, Types::Int], stack.clone())
                 } else {
                     stack.push(Types::Int);
-                    true
+                    ErrorTypes::None.into()
                 }
             }
         }
         Squared | Cubed => {
             if stack.len() == 0 {
-                false
+                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Int], stack.clone())
             } else {
                 let last = stack.last().unwrap().clone();
                 if last == Types::Int {
-                    true
+                    ErrorTypes::None.into()
                 } else {
-                    false
+                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Int, Types::Int], stack.clone())
                 }
             }
         }
         Not | NotPeek => {
             if stack.len() == 0 {
-                false
+                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Int], stack.clone())
             } else {
                 let last = if int == Internal::Not {
                     stack.pop().unwrap().clone()
@@ -210,26 +216,30 @@ pub fn type_check(int: Internal, stack: &mut Vec<Types>) -> bool {
                 };
                 if last == Types::Bool {
                     stack.push(Types::Bool);
-                    true
+                    ErrorTypes::None.into()
                 } else {
-                    false
+                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Bool], stack.clone())
                 }
             }
         }
         Equals | Larger | Smaller | LargerEq | SmallerEq => {
-            const allowed_types: [Types; 3] = [Types::Int, Types::String, Types::Bool];
+            const ALLOWED_TYPES: [Types; 3] = [Types::Int, Types::String, Types::Bool];
 
             if stack.len() < 2 {
-                false
+                ErrorTypes::TooFewElements.into_with_ctx_plus(vec![Types::Any, Types::Any], stack.clone(), "There are only int, string, bool allowed")
             } else {
                 let a = stack.pop().unwrap();
                 let b = stack.pop().unwrap();
 
                 if ALLOWED_TYPES.contains(&a) && ALLOWED_TYPES.contains(&b) {
-                    stack.push(Types::Bool);
-                    true
+                    if a == b {
+                        stack.push(Types::Bool);
+                        ErrorTypes::None.into()
+                    } else {
+                        ErrorTypes::InvalidTypes.into_with_ctx(vec![a.clone(), a.clone()], stack.clone())
+                    }
                 } else {
-                    false
+                    ErrorTypes::InvalidTypes.into_with_ctx_plus(vec![Types::Any, Types::Any], stack.clone(), "There are only int, string, bool allowed")
                 }
             }
         }

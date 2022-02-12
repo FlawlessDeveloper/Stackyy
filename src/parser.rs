@@ -8,12 +8,13 @@ use std::path::{Path, PathBuf};
 use rayon::iter::ParallelIterator;
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator};
 
-use crate::util::{compiler_error, compiler_error_str};
+use crate::util::{compiler_error, compiler_error_str, compiler_warning};
 use crate::util::internals::{Internal, to_internal};
 use crate::util::operation::{JumpOffset, Operand, Operation, OperationType};
 use crate::util::position::Position;
 use crate::util::token::*;
-use crate::util::type_check::Types;
+use crate::util::token::TokenType::Function as TokenFunction;
+use crate::util::type_check::{ErrorTypes, TypeCheckError, Types};
 use crate::VM;
 use crate::vm::MAX_CALL_STACK_SIZE;
 
@@ -28,12 +29,14 @@ impl Function {
         (self.data.1.clone(), self.data.2.clone())
     }
 
-    pub fn type_check(&self, functions: HashMap<String, (Vec<Types>, Vec<Types>)>, stack: &mut Vec<Types>) -> bool {
+    pub fn type_check(&self, functions: &HashMap<String, Function>, stack: &mut Vec<Types>) -> TypeCheckError {
         self.operations.iter()
-            .map(|op| op.1.clone())
-            .fold(true, |acc, op| {
-                if !op.type_check(functions.clone(), stack) {
-                    false
+            .fold(ErrorTypes::None.into(), |acc, op| {
+                let type_check = op.1.type_check(functions, stack);
+
+                if type_check.error != ErrorTypes::None {
+                    compiler_warning(format!("Operation caused type check failure"), op.clone().0);
+                    type_check
                 } else {
                     acc
                 }
@@ -71,7 +74,17 @@ impl State {
     }
 
     pub fn update(&mut self, tokens: Vec<(Position, Token)>) {
+        let functions = tokens.clone().iter().fold(HashMap::new(), |mut acc, instr| {
+            if instr.1.typ().clone() == TokenType::Function {
+                if let TokenValue::Function(name, inp, outp) = instr.1.value().clone() {
+                    acc.insert(name, (inp, outp));
+                }
+            }
+            acc
+        });
+
         let mut iterator = tokens.iter();
+
 
         while iterator.size() != 0 {
             let token = iterator.next();
@@ -162,17 +175,19 @@ impl State {
                                 let mut token = text.clone();
                                 token.remove(0);
 
-                                self.operations.contains_key(&token)
+                                functions.contains_key(&token)
                             } {
                                 let mut func_name = text.clone();
                                 func_name.remove(0);
 
+                                let (inp, outp) = functions.get(&func_name).unwrap();
+
                                 vec![Operation {
                                     typ: OperationType::PushFunction,
                                     token,
-                                    operand: Some(Operand::Str(func_name)),
+                                    operand: Some(Operand::PushFunction(func_name, inp.clone(), outp.clone())),
                                 }]
-                            } else if self.operations.contains_key(&text) {
+                            } else if functions.contains_key(&text) {
                                 vec![Operation {
                                     typ: OperationType::Call,
                                     token,
@@ -221,6 +236,17 @@ impl State {
                                     Keyword::INCLUDE => {
                                         compiler_error_str("Include is only allowed on the top level", pos.clone());
                                     }
+                                    Keyword::Call | Keyword::CallIf => {
+                                        ops.push(Operation {
+                                            typ: if keyword.clone() == Keyword::Call {
+                                                OperationType::Call
+                                            } else {
+                                                OperationType::CallIf
+                                            },
+                                            token,
+                                            operand: None,
+                                        })
+                                    }
                                     Keyword::End => {
                                         self.operations.insert(function.data.clone().0, function);
                                         self.in_fn = None;
@@ -234,6 +260,18 @@ impl State {
                         TokenType::Function => {
                             compiler_error_str("Functions are only allowed on the top level", pos.clone());
                             unreachable!()
+                        }
+                        TokenType::FunctionPtr => {
+                            if let TokenValue::Function(name, inp, outp) = token.value().clone() {
+                                vec![Operation {
+                                    typ: OperationType::PushFunction,
+                                    token,
+                                    operand: Some(Operand::PushFunction(name, inp, outp)),
+                                }]
+                            } else {
+                                compiler_error_str("Internal parser error occurred", pos);
+                                unreachable!();
+                            }
                         }
                     };
 
@@ -257,21 +295,42 @@ impl State {
             let fnc = self.in_fn.clone().unwrap();
             compiler_error(format!("Unclosed function {}", fnc.data.0), Position::default())
         }
+
+
+        self.operations = self.operations.clone().iter().map(|entry: (&String, &Function)| {
+            (entry.clone().0.clone(), Function {
+                data: entry.1.data.clone(),
+                operations: entry.1.operations.iter().map(|op| {
+                    if op.1.typ == OperationType::PushFunction {
+                        let mut operation = op.1.clone();
+
+                        if let Operand::Str(func_name) = operation.operand.clone().unwrap() {
+                            let (name, inp, outp) = self.operations.get(&func_name).unwrap().data.clone();
+
+                            operation.operand = Some(Operand::PushFunction(name, inp, outp));
+                        }
+
+                        (op.0.clone(), operation)
+                    } else {
+                        op.clone()
+                    }
+                }).collect(),
+            })
+        }).collect();
     }
 
     pub fn type_check(self) -> Result<VM, String> {
         for (name, function) in self.operations.clone() {
             let mut stack = function.get_contract().0;
 
-            if !function.type_check(self.operations.iter().map(|op| (op.0, op.1.get_contract())).fold(HashMap::new(), |mut acc, op| {
-                acc.insert(op.clone().0.clone(), op.1.clone());
-                acc
-            }), &mut stack) {
-                return Err(format!("Function {} failed type check", name));
+            let type_check = function.type_check(&self.operations, &mut stack);
+
+            if type_check.error != ErrorTypes::None {
+                return Err(format!("Function {} failed type check: {}", name, type_check));
             }
 
             if stack != function.get_contract().1 {
-                return Err(format!("Function {} failed type check! You still have elements left", name));
+                return Err(format!("Function {} failed type check! You still have unused elements left", name));
             }
         }
 
@@ -307,7 +366,11 @@ pub fn pre_parse(string: String, file: PathBuf, path: PathBuf) -> Vec<(Position,
         })
         .map(|line| {
             let tokens = line.1.split(" ").fold(vec![], |mut tokens, token| {
-                tokens.push(((tokens.len() + 1) as u32, token.to_string()));
+                let token_len = (tokens.len() + tokens.iter().fold(0, |acc, tkn| {
+                    acc + token.len()
+                })) as u32;
+
+                tokens.push((token_len, token.to_string()));
                 tokens
             });
 
