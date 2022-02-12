@@ -9,7 +9,7 @@ use crate::util::internals::Internal;
 use crate::util::operation::{Operand, Operation, OperationType};
 use crate::util::position::Position;
 use crate::util::register_type::RegisterType;
-use crate::util::type_check::{ErrorTypes, Types};
+use crate::util::type_check::{ErrorTypes, TypeCheckError, Types};
 use crate::vm;
 
 pub const MAX_CALL_STACK_SIZE: u8 = 40;
@@ -106,7 +106,7 @@ impl VM {
                 }
                 OperationType::PushFunction => {
                     if let Operand::PushFunction(fnc, inp, outp) = operation.operand.unwrap() {
-                        self.stack.push(RegisterType::Function(fnc))
+                        self.stack.push(RegisterType::Function(fnc, inp, outp))
                     }
                 }
                 OperationType::Internal => {
@@ -131,7 +131,7 @@ impl VM {
                                     RegisterType::Bool(bool) => {
                                         print!("{}", bool)
                                     }
-                                    RegisterType::Function(name) => {
+                                    RegisterType::Function(name, ..) => {
                                         print!("*{}()", name)
                                     }
                                     RegisterType::Empty => {
@@ -403,22 +403,24 @@ impl VM {
                     #[derive(Ord, PartialOrd, Eq, PartialEq)]
                     enum CallEnum {
                         None,
-                        SomeInline(String),
-                        SomeDynamic(String),
+                        SomeInline(String, Vec<Types>, Vec<Types>),
+                        SomeDynamic(String, Vec<Types>, Vec<Types>),
                     }
 
                     let top = {
                         if self.stack.len() != 0 {
                             let last = self.stack.last().unwrap().clone();
-                            if let RegisterType::Function(fnc) = last.clone() {
-                                CallEnum::SomeDynamic(fnc)
+                            if let RegisterType::Function(fnc, inp, outp) = last.clone() {
+                                CallEnum::SomeDynamic(fnc, inp, outp)
                             } else {
                                 CallEnum::None
                             }
                         } else {
                             if let Some(operand) = operation.operand {
                                 if let Operand::Call(fnc) = operand {
-                                    CallEnum::SomeInline(fnc)
+                                    let (inp, outp) = self.ops.get(&fnc).unwrap().get_contract();
+
+                                    CallEnum::SomeInline(fnc, inp, outp)
                                 } else {
                                     CallEnum::None
                                 }
@@ -429,12 +431,12 @@ impl VM {
                     };
 
                     if top != CallEnum::None {
-                        let fnc = if let CallEnum::SomeInline(fnc) = top {
-                            fnc
+                        let (fnc, inp, outp) = if let CallEnum::SomeInline(fnc, inp, outp) = top {
+                            (fnc, inp, outp)
                         } else {
                             let top = self.stack.pop().unwrap();
-                            if let RegisterType::Function(fnc) = top {
-                                fnc
+                            if let RegisterType::Function(fnc, inp, outp) = top {
+                                (fnc, inp, outp)
                             } else {
                                 unreachable!()
                             }
@@ -445,9 +447,12 @@ impl VM {
                         }
 
                         let fnc = self.ops.get(&fnc).unwrap().clone();
-
-                        for operation in fnc.operations {
-                            self.execute_op(operation, depth + 1);
+                        if (inp, outp) == fnc.get_contract() {
+                            for operation in fnc.operations {
+                                self.execute_op(operation, depth + 1);
+                            }
+                        } else {
+                            runtime_error_str("Typecheck for dynamic function call failed", position.clone());
                         }
                     } else {
                         runtime_error_str("Invalid function call", position.clone());
