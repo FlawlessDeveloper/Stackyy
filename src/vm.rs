@@ -114,9 +114,6 @@ impl VM {
                         match int {
                             Internal::NoOp => {}
                             Internal::Print | Internal::PrintLn => {
-                                if self.stack.len() == 0 {
-                                    runtime_error_str("To few elements on stack", position.clone());
-                                }
                                 let reg = self.stack.pop().unwrap();
                                 match reg {
                                     RegisterType::Int(int) => {
@@ -146,26 +143,15 @@ impl VM {
                                 }
                             }
                             Internal::Swap => {
-                                if self.stack.len() < 2 {
-                                    runtime_error_str("To few elements on stack", position.clone());
-                                }
-
                                 let a = self.stack.pop().unwrap();
                                 let b = self.stack.pop().unwrap();
                                 self.stack.push(a);
                                 self.stack.push(b);
                             }
                             Internal::Drop => {
-                                if self.stack.len() < 1 {
-                                    runtime_error_str("To few elements on stack", position.clone());
-                                }
                                 self.stack.pop().unwrap();
                             }
                             Internal::Dup => {
-                                if self.stack.len() < 1 {
-                                    runtime_error_str("To few elements on stack", position.clone());
-                                }
-
                                 let top = self.stack.pop().unwrap();
                                 self.stack.push(top.clone());
                                 self.stack.push(top);
@@ -185,10 +171,6 @@ impl VM {
                                 println!("{:#?}", self.stack);
                             }
                             Internal::Plus => {
-                                if self.stack.len() < 2 {
-                                    runtime_error_str("To few elements on stack", position.clone());
-                                }
-
                                 let top = self.stack.pop().unwrap();
                                 let bottom = self.stack.pop().unwrap();
 
@@ -203,10 +185,6 @@ impl VM {
                                 }
                             }
                             Internal::Minus => {
-                                if self.stack.len() < 2 {
-                                    runtime_error_str("To few elements on stack", position.clone());
-                                }
-
                                 let top = self.stack.pop().unwrap();
                                 let bottom = self.stack.pop().unwrap();
 
@@ -221,10 +199,6 @@ impl VM {
                                 }
                             }
                             Internal::Mult => {
-                                if self.stack.len() < 2 {
-                                    runtime_error_str("To few elements on stack", position.clone());
-                                }
-
                                 let top = self.stack.pop().unwrap();
                                 let bottom = self.stack.pop().unwrap();
 
@@ -239,10 +213,6 @@ impl VM {
                                 }
                             }
                             Internal::Div => {
-                                if self.stack.len() < 2 {
-                                    runtime_error_str("To few elements on stack", position.clone());
-                                }
-
                                 let top = self.stack.pop().unwrap();
                                 let bottom = self.stack.pop().unwrap();
 
@@ -261,10 +231,6 @@ impl VM {
                                 }
                             }
                             Internal::Modulo => {
-                                if self.stack.len() < 2 {
-                                    runtime_error_str("To few elements on stack", position.clone());
-                                }
-
                                 let top = self.stack.pop().unwrap();
                                 let bottom = self.stack.pop().unwrap();
 
@@ -278,37 +244,19 @@ impl VM {
                                     runtime_error_str("Usage of invalid types", position.clone());
                                 }
                             }
-                            Internal::Squared => {
-                                if self.stack.len() < 1 {
-                                    runtime_error_str("To few elements on stack", position.clone());
-                                }
-
+                            Internal::Squared | Internal::Cubed => {
                                 let top = self.stack.pop().unwrap();
-
                                 if let RegisterType::Int(top) = top {
-                                    self.stack.push(RegisterType::Int(top * top))
-                                } else {
-                                    runtime_error_str("Usage of invalid types", position.clone());
-                                }
-                            }
-                            Internal::Cubed => {
-                                if self.stack.len() < 1 {
-                                    runtime_error_str("To few elements on stack", position.clone());
-                                }
-
-                                let top = self.stack.pop().unwrap();
-
-                                if let RegisterType::Int(top) = top {
-                                    self.stack.push(RegisterType::Int(top * top * top))
+                                    self.stack.push(RegisterType::Int(if int == Internal::Cubed {
+                                        top * top * top
+                                    } else {
+                                        top * top
+                                    }))
                                 } else {
                                     runtime_error_str("Usage of invalid types", position.clone());
                                 }
                             }
                             Internal::Not => {
-                                if self.stack.len() < 1 {
-                                    runtime_error_str("To few elements on stack", position.clone());
-                                }
-
                                 let top = self.stack.pop().unwrap();
 
                                 if let RegisterType::Bool(top) = top {
@@ -318,10 +266,6 @@ impl VM {
                                 }
                             }
                             Internal::NotPeek => {
-                                if self.stack.len() < 1 {
-                                    runtime_error_str("To few elements on stack", position.clone());
-                                }
-
                                 let top = self.stack.last().unwrap();
 
                                 if let RegisterType::Bool(top) = top {
@@ -331,9 +275,6 @@ impl VM {
                                 }
                             }
                             Internal::Equals => {
-                                if self.stack.len() < 2 {
-                                    runtime_error_str("To few elements on stack", position.clone());
-                                }
                                 let a = self.stack.pop().unwrap();
                                 let b = self.stack.pop().unwrap();
 
@@ -363,10 +304,6 @@ impl VM {
                                 self.stack.push(RegisterType::Bool(success));
                             }
                             Internal::Larger | Internal::LargerEq | Internal::Smaller | Internal::SmallerEq => {
-                                if self.stack.len() < 2 {
-                                    runtime_error_str("To few elements on stack", position.clone());
-                                }
-
                                 let a = self.stack.pop().unwrap();
                                 let b = self.stack.pop().unwrap();
 
