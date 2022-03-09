@@ -32,13 +32,13 @@ pub enum Types {
 impl Into<String> for Types {
     fn into(self) -> String {
         match self {
-            Any => format!("any"),
-            Int => format!("int"),
-            Types::String => format!("str"),
-            Bool => format!("bool"),
-            Pointer => format!("ptr"),
-            Function => format!("fn"),
-            FunctionPointer(inp, outp) => {
+            Types::Any => ("any".to_string()),
+            Types::Int => ("int".to_string()),
+            Types::String => ("str".to_string()),
+            Types::Bool => ("bool".to_string()),
+            Types::Pointer => ("ptr".to_string()),
+            Types::Function => ("fn".to_string()),
+            Types::FunctionPointer(inp, outp) => {
                 let inp = inp.iter().fold(String::new(), |mut acc, wanted| {
                     acc.push_str(",");
                     let str: String = wanted.clone().into();
