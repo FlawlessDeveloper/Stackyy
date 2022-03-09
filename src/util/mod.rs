@@ -16,7 +16,7 @@ pub fn compiler_error_str(msg: &str, pos: Position) {
 }
 
 pub fn compiler_warning(msg: String, pos: Position) {
-    eprintln!("Compiler warning caused by  {} -> {}", pos, msg);
+    eprintln!("Compiler warning caused by {} -> {}", pos, msg);
 }
 
 pub fn compiler_warning_str(msg: &str, pos: Position) {
