@@ -9,8 +9,7 @@ use crate::util::internals::Internal;
 use crate::util::operation::{Operand, Operation, OperationType};
 use crate::util::position::Position;
 use crate::util::register_type::RegisterType;
-use crate::util::type_check::{ErrorTypes, TypeCheckError, Types};
-use crate::vm;
+use crate::util::type_check::{ErrorTypes, Types};
 
 pub const MAX_CALL_STACK_SIZE: u8 = 40;
 
@@ -19,6 +18,7 @@ pub struct VM {
     ops: HashMap<String, Function>,
     stack: Vec<RegisterType>,
     type_stack: Vec<Types>,
+    last_op: Option<(Position, Operation)>,
     reg_a: RegisterType,
     reg_b: RegisterType,
     reg_c: RegisterType,
@@ -37,6 +37,7 @@ impl From<State> for VM {
             ops,
             stack: vec![],
             type_stack: vec![],
+            last_op: None,
             reg_a: RegisterType::Empty,
             reg_b: RegisterType::Empty,
             reg_c: RegisterType::Empty,
@@ -72,17 +73,22 @@ impl VM {
 
     fn execute_fn(&mut self, fnc: (&Function, u8)) {
         for operation in &fnc.0.operations {
-            self.execute_op(operation.clone(), fnc.1)
+            self.execute_op(operation.clone(), fnc.1, fnc.0.name())
         }
     }
 
-    fn execute_op(&mut self, op: (Position, Operation), depth: u8) {
-        let position = op.0;
-        let operation = op.1;
+    fn execute_op(&mut self, op: (Position, Operation), depth: u8, fn_name: String) {
+        let position = op.clone().0;
+        let operation = op.clone().1;
         if depth > MAX_CALL_STACK_SIZE {
             runtime_error_str("Stack overflow", position.clone());
         }
-        if operation.type_check(&self.ops, &mut self.type_stack).error == ErrorTypes::None {
+
+        if self.type_stack.len() != self.stack.len() {
+            runtime_error(format!("Typecheck desync happened. Responsible operation: {:#?}", self.last_op.clone().unwrap()), position.clone());
+        }
+
+        if operation.type_check(&self.ops, &mut self.type_stack, false).error == ErrorTypes::None {
             match operation.typ {
                 OperationType::PushInt => {
                     if let Operand::Int(op) = operation.operand.unwrap() {
@@ -415,19 +421,18 @@ impl VM {
                     }
 
                     let top = {
-                        if self.stack.len() != 0 {
-                            let last = self.stack.last().unwrap().clone();
-                            if let RegisterType::Function(fnc, inp, outp) = last.clone() {
-                                CallEnum::SomeDynamic(fnc, inp, outp)
+                        if let Some(operand) = operation.operand {
+                            if let Operand::Call(fnc) = operand {
+                                let (inp, outp) = self.ops.get(&fnc).unwrap().get_contract();
+                                CallEnum::SomeInline(fnc, inp, outp)
                             } else {
                                 CallEnum::None
                             }
                         } else {
-                            if let Some(operand) = operation.operand {
-                                if let Operand::Call(fnc) = operand {
-                                    let (inp, outp) = self.ops.get(&fnc).unwrap().get_contract();
-
-                                    CallEnum::SomeInline(fnc, inp, outp)
+                            if self.stack.len() != 0 {
+                                let last = self.stack.last().unwrap().clone();
+                                if let RegisterType::Function(fnc, inp, outp) = last.clone() {
+                                    CallEnum::SomeDynamic(fnc, inp, outp)
                                 } else {
                                     CallEnum::None
                                 }
@@ -453,10 +458,11 @@ impl VM {
                             runtime_error(format!("Function: {} does not exist", fnc), position.clone());
                         }
 
+                        let fnc_str = fnc.clone();
                         let fnc = self.ops.get(&fnc).unwrap().clone();
                         if (inp, outp) == fnc.get_contract() {
                             for operation in fnc.operations {
-                                self.execute_op(operation, depth + 1);
+                                self.execute_op(operation, depth + 1, fnc_str.clone());
                             }
                         } else {
                             runtime_error_str("Typecheck for dynamic function call failed", position.clone());
@@ -475,7 +481,9 @@ impl VM {
                 }
             }
         } else {
-            runtime_error_str("Type check failed", position);
+            runtime_error(format!("Function {} failed type check ", fn_name), position);
         };
+
+        self.last_op = Some(op);
     }
 }

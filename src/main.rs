@@ -21,6 +21,7 @@ pub mod args;
 pub mod parser;
 pub mod util;
 pub mod vm;
+pub mod opt;
 
 fn main() {
     std::panic::set_hook(Box::new(|panic_info| {

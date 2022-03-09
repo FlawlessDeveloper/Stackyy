@@ -43,7 +43,7 @@ pub struct Operation {
 }
 
 impl Operation {
-    pub fn type_check(&self, functions: &HashMap<String, Function>, stack: &mut Vec<Types>) -> TypeCheckError {
+    pub fn type_check(&self, functions: &HashMap<String, Function>, stack: &mut Vec<Types>, compile_time: bool) -> TypeCheckError {
         match self.typ {
             OperationType::PushInt => {
                 stack.push(Types::Int);
@@ -109,7 +109,6 @@ impl Operation {
                         if let Types::FunctionPointer(inp, outp) = top {
                             (ErrorTypes::None.into(), inp, outp)
                         } else {
-                            println!("3");
                             (ErrorTypes::WrongData.into(), vec![], vec![])
                         }
                     }
@@ -117,13 +116,30 @@ impl Operation {
 
                 if success.error == ErrorTypes::None {
                     if stack.len() >= inp.len() {
-                        let mut tmp_stack = stack.clone();
-                        if inp.iter().filter(|required| {
-                            let top = tmp_stack.pop().unwrap();
-                            **required == top
-                        }).count() != 0 {
+                        let success = {
+                            let mut tmp_inp = inp.clone();
+                            let mut tmp_stack = stack.clone();
+                            if inp.len() <= tmp_stack.len() {
+                                let mut success = true;
+                                while tmp_stack.len() > 0 {
+                                    let a = tmp_inp.pop().unwrap();
+                                    let b = tmp_stack.pop().unwrap();
+                                    if a != b {
+                                        success = false;
+                                    }
+                                }
+                                success
+                            } else {
+                                false
+                            }
+                        };
+
+                        if !success {
                             ErrorTypes::InvalidTypes.into_with_ctx(inp, stack.clone())
                         } else {
+                            for _ in 0..inp.len() {
+                                stack.pop().unwrap();
+                            }
                             for typ in outp {
                                 stack.push(typ.clone());
                             }

@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use rayon::iter::ParallelIterator;
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator};
 
+use crate::opt::resolve_opt;
 use crate::util::{compiler_error, compiler_error_str, compiler_warning};
 use crate::util::internals::{Internal, to_internal};
 use crate::util::operation::{JumpOffset, Operand, Operation, OperationType};
@@ -33,7 +34,7 @@ impl Function {
     pub fn type_check(&self, functions: &HashMap<String, Function>, stack: &mut Vec<Types>) -> TypeCheckError {
         self.operations.iter()
             .fold(ErrorTypes::None.into(), |acc, op| {
-                let type_check = op.1.type_check(functions, stack);
+                let type_check = op.1.type_check(functions, stack, true);
 
                 if type_check.error != ErrorTypes::None {
                     let op = op.clone();
@@ -46,10 +47,15 @@ impl Function {
                 }
             })
     }
+
+    pub fn name(&self) -> String {
+        self.data.0.clone()
+    }
 }
 
 pub struct State {
     operations: HashMap<String, Function>,
+    functions: HashMap<String, (Vec<Types>, Vec<Types>)>,
     incl_lvl: u8,
     path: PathBuf,
     sys_libs: Vec<String>,
@@ -60,6 +66,7 @@ impl State {
     pub fn new(path: PathBuf) -> Self {
         Self {
             operations: HashMap::new(),
+            functions: HashMap::new(),
             incl_lvl: 0,
             in_fn: None,
             sys_libs: vec![],
@@ -70,6 +77,7 @@ impl State {
     pub fn new_with_include(old: u8, path: PathBuf) -> Self {
         Self {
             operations: HashMap::new(),
+            functions: HashMap::new(),
             incl_lvl: old + 1,
             in_fn: None,
             sys_libs: vec![],
@@ -78,7 +86,7 @@ impl State {
     }
 
     pub fn update(&mut self, tokens: Vec<(Position, Token)>) {
-        let functions = tokens.clone().iter().fold(HashMap::new(), |mut acc, instr| {
+        self.functions = tokens.clone().iter().fold(HashMap::new(), |mut acc, instr| {
             if instr.1.typ().clone() == TokenType::Function {
                 if let TokenValue::Function(name, inp, outp) = instr.1.value().clone() {
                     acc.insert(name, (inp, outp));
@@ -119,8 +127,17 @@ impl State {
                                         if let TokenValue::String(mut s_path) = path.1.value().clone() {
                                             if s_path.starts_with("@") {
                                                 s_path.remove(0);
-                                                if !self.sys_libs.contains(&s_path) {
-                                                    self.sys_libs.push(s_path);
+                                                if s_path.starts_with("std/") {
+                                                    if !self.sys_libs.contains(&s_path) {
+                                                        self.sys_libs.push(s_path);
+                                                    }
+                                                } else {
+                                                    let pathbuf = PathBuf::from(Path::new(&s_path));
+                                                    let parsed = pre_parse(resolve_opt(&s_path), pathbuf.clone(), pathbuf.clone());
+                                                    let state = tokenize(parsed, self.incl_lvl, pathbuf);
+
+                                                    self.functions.extend(state.functions);
+                                                    self.operations.extend(state.operations);
                                                 }
                                             } else {
                                                 let mut incl_path = self.path.clone();
@@ -181,19 +198,19 @@ impl State {
                                 let mut token = text.clone();
                                 token.remove(0);
 
-                                functions.contains_key(&token)
+                                self.functions.contains_key(&token)
                             } {
                                 let mut func_name = text.clone();
                                 func_name.remove(0);
 
-                                let (inp, outp) = functions.get(&func_name).unwrap();
+                                let (inp, outp) = self.functions.get(&func_name).unwrap();
 
                                 vec![Operation {
                                     typ: OperationType::PushFunction,
                                     token,
                                     operand: Some(Operand::PushFunction(func_name, inp.clone(), outp.clone())),
                                 }]
-                            } else if functions.contains_key(&text) {
+                            } else if self.functions.contains_key(&text) {
                                 vec![Operation {
                                     typ: OperationType::Call,
                                     token,
