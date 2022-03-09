@@ -17,6 +17,8 @@ use crate::util::type_check::{ErrorTypes, TypeCheckError, Types};
 use crate::VM;
 use crate::vm::MAX_CALL_STACK_SIZE;
 
+static MAX_INCL_DEPTH: u8 = 3;
+
 #[derive(Debug, Clone)]
 pub struct Function {
     data: (String, Vec<Types>, Vec<Types>),
@@ -48,7 +50,7 @@ impl Function {
 
 pub struct State {
     operations: HashMap<String, Function>,
-    included: bool,
+    incl_lvl: u8,
     path: PathBuf,
     sys_libs: Vec<String>,
     in_fn: Option<Function>,
@@ -58,17 +60,17 @@ impl State {
     pub fn new(path: PathBuf) -> Self {
         Self {
             operations: HashMap::new(),
-            included: false,
+            incl_lvl: 0,
             in_fn: None,
             sys_libs: vec![],
             path,
         }
     }
 
-    pub fn new_with_include(path: PathBuf) -> Self {
+    pub fn new_with_include(old: u8, path: PathBuf) -> Self {
         Self {
             operations: HashMap::new(),
-            included: true,
+            incl_lvl: old + 1,
             in_fn: None,
             sys_libs: vec![],
             path,
@@ -102,7 +104,7 @@ impl State {
                             if let TokenValue::Keyword(keyword) = value {
                                 match keyword {
                                     Keyword::INCLUDE => {
-                                        if self.included {
+                                        if self.incl_lvl > MAX_INCL_DEPTH {
                                             compiler_error_str("Nested includes are not allowed", pos.clone());
                                         }
 
@@ -117,7 +119,9 @@ impl State {
                                         if let TokenValue::String(mut s_path) = path.1.value().clone() {
                                             if s_path.starts_with("@") {
                                                 s_path.remove(0);
-                                                self.sys_libs.push(s_path);
+                                                if !self.sys_libs.contains(&s_path) {
+                                                    self.sys_libs.push(s_path);
+                                                }
                                             } else {
                                                 let mut incl_path = self.path.clone();
                                                 incl_path.push(s_path);
@@ -135,7 +139,7 @@ impl State {
                                                 }
 
                                                 let parsed = pre_parse(string, incl_path.clone(), incl_path.parent().unwrap().to_path_buf());
-                                                let state = tokenize(parsed, true, incl_path.parent().unwrap().to_path_buf());
+                                                let state = tokenize(parsed, self.incl_lvl, incl_path.parent().unwrap().to_path_buf());
 
                                                 self.operations.extend(state.operations);
                                             }
@@ -440,8 +444,8 @@ pub fn pre_parse(string: String, file: PathBuf, path: PathBuf) -> Vec<(Position,
     lines
 }
 
-pub fn tokenize(tokens: Vec<(Position, String)>, included: bool, path: PathBuf) -> State {
-    let mut state = if included { State::new_with_include(path) } else { State::new(path) };
+pub fn tokenize(tokens: Vec<(Position, String)>, included: u8, path: PathBuf) -> State {
+    let mut state = if included != 0 { State::new_with_include(included, path) } else { State::new(path) };
 
     state.update(tokens.par_iter().map(|token| {
         let token = token.clone();
