@@ -1,0 +1,14 @@
+@success(str->)
+    "[ + ]" print
+    println
+end
+
+@neutral(str->)
+    "[ * ]" print
+    println
+end
+
+@error(str->)
+    "[ X ]" print
+    println
+end
