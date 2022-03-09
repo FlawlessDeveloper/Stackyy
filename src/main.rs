@@ -65,7 +65,7 @@ fn main() {
             let path = file_path.clone().parent().unwrap().to_path_buf();
 
             let pre_parsed = pre_parse(file_text, file_path, path.clone());
-            let parsed = tokenize(pre_parsed, false, path);
+            let parsed = tokenize(pre_parsed, 0, path);
 
             let checked = parsed.type_check();
 
