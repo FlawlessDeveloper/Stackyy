@@ -39,7 +39,7 @@ impl Function {
                     let op = op.clone();
                     let typ = op.1.typ.clone();
                     let operand = op.1.operand.clone();
-                    compiler_warning(format!("Operation caused type check failure. \r\nOperation Type: {:?} \r\nOperation Value: {:?}", typ, operand), op.clone().0);
+                    compiler_warning(format!("\r\nOperation caused type check failure. \r\nOperation Type: {:?} \r\nOperation Value: {:?}", typ, operand), op.clone().0);
                     type_check
                 } else {
                     acc
