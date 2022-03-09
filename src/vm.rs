@@ -330,6 +330,76 @@ impl VM {
                                 self.stack.push(RegisterType::Bool(success));
                             }
 
+                            Internal::ReflectionRemoveStr | Internal::ReflectionRemoveStrDrop => {
+                                let fnc = self.stack.pop().unwrap();
+                                let amount = self.stack.pop().unwrap();
+                                let (str, mod_fnc) = if let RegisterType::Function(mut str, inp, outp) = fnc {
+                                    if let RegisterType::Int(val) = amount {
+                                        if str.len() == 0 {
+                                            runtime_error_str("Cannot remove string from empty function name", position.clone());
+                                            unreachable!();
+                                        }
+                                        if val > str.len() as i32 {
+                                            runtime_error_str("Tried to remove too much from function name", position.clone());
+                                            unreachable!();
+                                        }
+
+                                        let mut str_add = String::new();
+
+                                        for _ in 0..val {
+                                            let char = str.pop();
+                                            if let Some(char) = char {
+                                                str_add.push(char);
+                                            } else {
+                                                runtime_error_str("Tried to remove too much from function name", position.clone());
+                                                unreachable!();
+                                            }
+                                        }
+
+
+                                        (str_add, RegisterType::Function(str, inp, outp))
+                                    } else {
+                                        runtime_error_str("Comparison of invalid types", position.clone());
+                                        unreachable!();
+                                    }
+                                } else {
+                                    runtime_error_str("Comparison of invalid types", position.clone());
+                                    unreachable!();
+                                };
+                                if int != Internal::ReflectionRemoveStrDrop {
+                                    self.stack.push(RegisterType::String(str));
+                                }
+                                self.stack.push(mod_fnc);
+                            }
+                            Internal::ReflectionPush => {
+                                let fnc = self.stack.pop().unwrap();
+                                let string = self.stack.pop().unwrap();
+                                let mod_fnc = if let RegisterType::Function(mut str, inp, outp) = fnc {
+                                    if let RegisterType::String(val) = string {
+                                        str.push_str(&val);
+                                        RegisterType::Function(str, inp, outp)
+                                    } else {
+                                        runtime_error_str("Comparison of invalid types", position.clone());
+                                        unreachable!();
+                                    }
+                                } else {
+                                    runtime_error_str("Comparison of invalid types", position.clone());
+                                    unreachable!();
+                                };
+
+                                self.stack.push(mod_fnc)
+                            }
+                            Internal::ReflectionClear => {
+                                let fnc = self.stack.pop().unwrap();
+                                let mod_fnc = if let RegisterType::Function(_, inp, outp) = fnc {
+                                    RegisterType::Function(String::new(), inp, outp)
+                                } else {
+                                    runtime_error_str("Comparison of invalid types", position.clone());
+                                    unreachable!();
+                                };
+                                self.stack.push(mod_fnc);
+                            }
+
                             _ => {
                                 println!("Internal: {:?} not implemented yet", int)
                             }

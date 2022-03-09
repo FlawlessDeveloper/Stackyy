@@ -34,7 +34,10 @@ impl Function {
                 let type_check = op.1.type_check(functions, stack);
 
                 if type_check.error != ErrorTypes::None {
-                    compiler_warning(format!("Operation caused type check failure"), op.clone().0);
+                    let op = op.clone();
+                    let typ = op.1.typ.clone();
+                    let operand = op.1.operand.clone();
+                    compiler_warning(format!("Operation caused type check failure. \r\nOperation Type: {:?} \r\nOperation Value: {:?}", typ, operand), op.clone().0);
                     type_check
                 } else {
                     acc

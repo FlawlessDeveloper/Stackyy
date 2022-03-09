@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::lazy::SyncLazy;
 
 use crate::util::{compiler_error, compiler_error_str};
-use crate::util::internals::Internal::{Cubed, DbgStack, Div, Drop, DropStack, Dup, DupStack, Equals, Larger, LargerEq, Minus, Modulo, Mult, NoOp, Not, NotPeek, Plus, Print, PrintLn, RevStack, Smaller, SmallerEq, Squared, Swap};
+use crate::util::internals::Internal::{Cubed, DbgStack, Div, Drop, DropStack, Dup, DupStack, Equals, Larger, LargerEq, Minus, Modulo, Mult, NoOp, Not, NotPeek, Plus, Print, PrintLn, ReflectionClear, ReflectionPush, ReflectionRemoveStr, ReflectionRemoveStrDrop, RevStack, Smaller, SmallerEq, Squared, Swap};
 use crate::util::position::Position;
 use crate::util::token::TokenValue;
 use crate::util::type_check::{ErrorTypes, TypeCheckError, Types};
@@ -23,6 +23,10 @@ static _INTERNALS_MAP: SyncLazy<HashMap<String, Internal>> = SyncLazy::new(|| {
 
 static REFLECTION_INTERNALS_MAP: SyncLazy<HashMap<String, Internal>> = SyncLazy::new(|| {
     let mut map = HashMap::new();
+    map.insert("ref-rem-str-drop".to_string(), ReflectionRemoveStrDrop);
+    map.insert("ref-rem-str".to_string(), ReflectionRemoveStr);
+    map.insert("ref-push".to_string(), ReflectionPush);
+    map.insert("ref-clear".to_string(), ReflectionClear);
     map
 });
 
@@ -68,7 +72,7 @@ static INCLUDE_MAP: SyncLazy<HashMap<String, HashMap<String, Internal>>> = SyncL
     map.insert("std/bool".to_string(), BOOL_INTERNALS_MAP.clone());
     map.insert("std/simple-maths".to_string(), BASIC_MATH_INTERNALS_MAP.clone());
     map.insert("std/stack-ops".to_string(), STACK_OPS_INTERNALS_MAP.clone());
-    map.insert("std/reflection".to_string(), STACK_OPS_INTERNALS_MAP.clone());
+    map.insert("std/reflection".to_string(), REFLECTION_INTERNALS_MAP.clone());
     map
 });
 
@@ -99,6 +103,10 @@ pub enum Internal {
     Smaller,
     LargerEq,
     SmallerEq,
+    ReflectionRemoveStr,
+    ReflectionRemoveStrDrop,
+    ReflectionPush,
+    ReflectionClear,
 }
 
 pub fn to_internal(includes: Vec<String>, str: &TokenValue, pos: Position) -> Internal {
@@ -116,7 +124,7 @@ pub fn to_internal(includes: Vec<String>, str: &TokenValue, pos: Position) -> In
         if let Some(op) = ops.get(str) {
             op.clone()
         } else {
-            compiler_error(format!("The internal call {} does not exit or is not included", str), pos);
+            compiler_error(format!("The internal call {} does not exist or is not included", str), pos);
             unreachable!()
         }
     } else {
@@ -126,13 +134,15 @@ pub fn to_internal(includes: Vec<String>, str: &TokenValue, pos: Position) -> In
 }
 
 pub fn type_check(int: Internal, stack: &mut Vec<Types>) -> TypeCheckError {
+    let tmp_stack = stack.clone();
+
     match int {
         NoOp | DbgStack => {
             ErrorTypes::None.into()
         }
         Print | PrintLn => {
             if stack.len() == 0 {
-                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Any, Types::Any], stack.clone())
+                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Any, Types::Any], tmp_stack)
             } else {
                 stack.pop();
                 ErrorTypes::None.into()
@@ -140,7 +150,7 @@ pub fn type_check(int: Internal, stack: &mut Vec<Types>) -> TypeCheckError {
         }
         Swap => {
             if stack.len() < 2 {
-                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Any, Types::Any], stack.clone())
+                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Any, Types::Any], tmp_stack)
             } else {
                 let a = stack.pop().unwrap();
                 let b = stack.pop().unwrap();
@@ -151,7 +161,7 @@ pub fn type_check(int: Internal, stack: &mut Vec<Types>) -> TypeCheckError {
         }
         Drop => {
             if stack.len() == 0 {
-                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Any], stack.clone())
+                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Any], tmp_stack)
             } else {
                 stack.pop();
                 ErrorTypes::None.into()
@@ -159,7 +169,7 @@ pub fn type_check(int: Internal, stack: &mut Vec<Types>) -> TypeCheckError {
         }
         Dup => {
             if stack.len() == 0 {
-                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Any], stack.clone())
+                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Any], tmp_stack)
             } else {
                 let last = stack.last().unwrap().clone();
                 stack.push(last);
@@ -180,13 +190,13 @@ pub fn type_check(int: Internal, stack: &mut Vec<Types>) -> TypeCheckError {
         }
         Plus | Minus | Mult | Div | Modulo => {
             if stack.len() < 2 {
-                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Int, Types::Int], stack.clone())
+                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Int, Types::Int], tmp_stack)
             } else {
                 let a = stack.pop().unwrap();
                 let b = stack.pop().unwrap();
 
                 if a != Types::Int || b != Types::Int {
-                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Int, Types::Int], stack.clone())
+                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Int, Types::Int], tmp_stack)
                 } else {
                     stack.push(Types::Int);
                     ErrorTypes::None.into()
@@ -195,19 +205,19 @@ pub fn type_check(int: Internal, stack: &mut Vec<Types>) -> TypeCheckError {
         }
         Squared | Cubed => {
             if stack.len() == 0 {
-                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Int], stack.clone())
+                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Int], tmp_stack)
             } else {
                 let last = stack.last().unwrap().clone();
                 if last == Types::Int {
                     ErrorTypes::None.into()
                 } else {
-                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Int, Types::Int], stack.clone())
+                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Int, Types::Int], tmp_stack)
                 }
             }
         }
         Not | NotPeek => {
             if stack.len() == 0 {
-                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Int], stack.clone())
+                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Int], tmp_stack)
             } else {
                 let last = if int == Internal::Not {
                     stack.pop().unwrap().clone()
@@ -218,7 +228,7 @@ pub fn type_check(int: Internal, stack: &mut Vec<Types>) -> TypeCheckError {
                     stack.push(Types::Bool);
                     ErrorTypes::None.into()
                 } else {
-                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Bool], stack.clone())
+                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Bool], tmp_stack)
                 }
             }
         }
@@ -226,7 +236,7 @@ pub fn type_check(int: Internal, stack: &mut Vec<Types>) -> TypeCheckError {
             const ALLOWED_TYPES: [Types; 3] = [Types::Int, Types::String, Types::Bool];
 
             if stack.len() < 2 {
-                ErrorTypes::TooFewElements.into_with_ctx_plus(vec![Types::Any, Types::Any], stack.clone(), "There are only int, string, bool allowed")
+                ErrorTypes::TooFewElements.into_with_ctx_plus(vec![Types::Any, Types::Any], tmp_stack, "There are only int, string, bool allowed")
             } else {
                 let a = stack.pop().unwrap();
                 let b = stack.pop().unwrap();
@@ -239,7 +249,84 @@ pub fn type_check(int: Internal, stack: &mut Vec<Types>) -> TypeCheckError {
                         ErrorTypes::InvalidTypes.into_with_ctx(vec![a.clone(), a.clone()], stack.clone())
                     }
                 } else {
-                    ErrorTypes::InvalidTypes.into_with_ctx_plus(vec![Types::Any, Types::Any], stack.clone(), "There are only int, string, bool allowed")
+                    ErrorTypes::InvalidTypes.into_with_ctx_plus(vec![Types::Any, Types::Any], tmp_stack, "There are only int, string, bool allowed")
+                }
+            }
+        }
+        ReflectionRemoveStr => {
+            if stack.len() < 2 {
+                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Int, Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
+            } else {
+                let fnc = stack.pop().unwrap();
+
+                if let Types::FunctionPointer(_, _) = fnc {
+                    let amount = stack.pop().unwrap();
+                    if amount == Types::Int {
+                        stack.push(Types::String);
+                        stack.push(fnc.clone());
+                        ErrorTypes::None.into()
+                    } else {
+                        ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Int, Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
+                    }
+                } else {
+                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Int, Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
+                }
+            }
+        }
+        ReflectionRemoveStrDrop => {
+            if stack.len() < 2 {
+                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Int, Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
+            } else {
+                let fnc = stack.pop().unwrap();
+
+                if let Types::FunctionPointer(_, _) = fnc {
+                    let amount = stack.pop().unwrap();
+                    if amount == Types::Int {
+                        stack.push(fnc.clone());
+                        ErrorTypes::None.into()
+                    } else {
+                        ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Int, Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
+                    }
+                } else {
+                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Int, Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
+                }
+            }
+        }
+        ReflectionPush => {
+            if stack.len() < 2 {
+                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::String, Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
+            } else {
+                let fnc = stack.pop().unwrap();
+                let str = stack.pop().unwrap();
+
+                if let Types::FunctionPointer(_, _) = fnc {
+                    if str == Types::String {
+                        stack.push(fnc.clone());
+                        ErrorTypes::None.into()
+                    } else {
+                        ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::String, Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
+                    }
+                } else {
+                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::String, Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
+                }
+            }
+        }
+        ReflectionClear => {
+            if stack.len() == 0 {
+                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
+            } else {
+                let fnc = stack.pop().unwrap();
+
+                if let Types::FunctionPointer(_, _) = fnc {
+                    let amount = stack.pop().unwrap();
+                    if amount == Types::String {
+                        stack.push(fnc.clone());
+                        ErrorTypes::None.into()
+                    } else {
+                        ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
+                    }
+                } else {
+                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
                 }
             }
         }
