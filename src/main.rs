@@ -25,6 +25,7 @@ pub mod opt;
 
 fn main() {
     std::panic::set_hook(Box::new(|panic_info| {
+        eprintln!();
         eprintln!("----- Error -----");
         if cfg!(debug_assertions) {
             let current_backtrace = Backtrace::new();
@@ -78,7 +79,7 @@ fn main() {
             }
         }
         Action::Interpret | Action::Info => {
-            let file_bytes = {
+            let _file_bytes = {
                 let file_name = args.file;
                 let file = OpenOptions::new().read(true).open(&file_name).map_err(|err| format!("Could not open file {} to read from: {}", file_name, err));
 
