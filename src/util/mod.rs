@@ -16,7 +16,7 @@ pub fn compiler_error_str(msg: &str, pos: Position) {
 }
 
 pub fn compiler_warning(msg: String, pos: Position) {
-    eprintln!("Compiler warning caused by {} -> {}", pos, msg);
+    eprintln!("WARNING at {} -> {}", pos, msg);
 }
 
 pub fn compiler_warning_str(msg: &str, pos: Position) {
@@ -24,7 +24,7 @@ pub fn compiler_warning_str(msg: &str, pos: Position) {
 }
 
 pub fn runtime_error(msg: String, pos: Position) {
-    panic!("Runtime error caused by {} -> {}", pos, msg);
+    panic!("RUNTIME ERROR at {} -> {}", pos, msg);
 }
 
 pub fn runtime_error_str(msg: &str, pos: Position) {
@@ -32,7 +32,7 @@ pub fn runtime_error_str(msg: &str, pos: Position) {
 }
 
 pub fn runtime_warning(msg: String, pos: Position) {
-    eprintln!("Runtime warning caused by  {} -> {}", pos, msg);
+    eprintln!("RUNTIME ERROR at {} -> {}", pos, msg);
 }
 
 pub fn runtime_warning_str(msg: &str, pos: Position) {
