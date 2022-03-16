@@ -137,8 +137,10 @@ impl Operation {
                         if !success {
                             ErrorTypes::InvalidTypes.into_with_ctx(inp, stack.clone())
                         } else {
-                            for _ in 0..inp.len() {
-                                stack.pop().unwrap();
+                            if compile_time {
+                                for _ in 0..inp.len() {
+                                    stack.pop().unwrap();
+                                }
                             }
                             for typ in outp {
                                 stack.push(typ.clone());
