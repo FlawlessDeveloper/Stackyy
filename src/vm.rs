@@ -1,12 +1,9 @@
-use std::any::Any;
 use std::collections::HashMap;
-use std::io::{stdout, Write};
 use std::process::exit;
 
 use crate::parser::{Function, State};
-use crate::util::{compiler_error, compiler_error_str, runtime_error, runtime_error_str, runtime_warning, runtime_warning_str};
-use crate::util::internals::Internal;
-use crate::util::operation::{Operand, Operation, OperationType};
+use crate::util::{compiler_error_str, runtime_error, runtime_error_str, runtime_warning, runtime_warning_str};
+use crate::util::operation::{Operation, OperationData, OperationType};
 use crate::util::position::Position;
 use crate::util::register_type::RegisterType;
 use crate::util::type_check::{ErrorTypes, Types};
@@ -18,7 +15,8 @@ pub struct VM {
     ops: HashMap<String, Function>,
     stack: Vec<RegisterType>,
     type_stack: Vec<Types>,
-    last_op: Option<(Position, Operation)>,
+    last_op: Option<(Position, OperationData)>,
+    depth: u8,
     reg_a: RegisterType,
     reg_b: RegisterType,
     reg_c: RegisterType,
@@ -31,13 +29,14 @@ pub struct VM {
 
 impl From<State> for VM {
     fn from(state: State) -> Self {
-        let mut ops = state.get_ops();
+        let mut ops = state.get_ops().clone();
         Self {
             ip: 0,
             ops,
             stack: vec![],
             type_stack: vec![],
             last_op: None,
+            depth: 0,
             reg_a: RegisterType::Empty,
             reg_b: RegisterType::Empty,
             reg_c: RegisterType::Empty,
@@ -58,7 +57,7 @@ impl VM {
 
         let start = self.ops.get("main").unwrap().clone();
 
-        self.execute_fn((&start, 0));
+        self.execute_fn(&start);
 
         if self.stack.len() != 1 {
             runtime_error_str("No return code provided", Position::default());
@@ -71,16 +70,28 @@ impl VM {
         }
     }
 
-    fn execute_fn(&mut self, fnc: (&Function, u8)) {
-        for operation in &fnc.0.operations {
-            self.execute_op(operation.clone(), fnc.1, fnc.0.name())
+    pub fn execute_fn(&mut self, fnc: &Function) {
+        self.depth += 1;
+        for operation in &fnc.operations {
+            self.execute_op(operation, fnc.name())
         }
+        self.depth -= 1;
     }
 
-    fn execute_op(&mut self, op: (Position, Operation), depth: u8, fn_name: String) {
-        let position = op.clone().0;
-        let operation = op.clone().1;
-        if depth > MAX_CALL_STACK_SIZE {
+    pub fn stack(&self) -> &Vec<RegisterType> {
+        &self.stack
+    }
+
+    pub fn stack_mut(&mut self) -> &mut Vec<RegisterType> {
+        &mut self.stack
+    }
+
+    fn execute_op(&mut self, op: &(Position, Operation), fn_name: String) {
+        let position = op.0.clone();
+        let data = op.1.data();
+        let typecheck = &op.1.type_check;
+        let exec = &op.1.execute_fn;
+        if self.depth > MAX_CALL_STACK_SIZE {
             runtime_error_str("Stack overflow", position.clone());
         }
 
@@ -88,7 +99,18 @@ impl VM {
             runtime_error(format!("Typecheck desync happened. Responsible operation: {:#?}", self.last_op.clone().unwrap()), position.clone());
         }
 
-        if operation.type_check(&self.ops, &mut self.type_stack, false).error == ErrorTypes::None {
+        let tc_error = (typecheck(data, &self.ops, &mut self.type_stack, false)).is_error();
+
+        if !tc_error {
+            exec(data, self);
+        } else {
+            runtime_error(format!("Function {} failed type check ", fn_name), position.clone());
+        };
+
+        self.last_op = Some((position, data.clone()))
+    }
+
+    /*
             match operation.typ {
                 OperationType::PushInt => {
                     if let Operand::Int(op) = operation.operand.unwrap() {
@@ -480,10 +502,11 @@ impl VM {
                     runtime_warning(format!("Operation: {:?} not implemented yet", operation), position.clone())
                 }
             }
-        } else {
-            runtime_error(format!("Function {} failed type check ", fn_name), position);
-        };
+
 
         self.last_op = Some(op);
+     */
+    pub fn ops(&self) -> &HashMap<String, Function> {
+        &self.ops
     }
 }
