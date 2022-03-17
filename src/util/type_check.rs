@@ -63,6 +63,7 @@ pub enum ErrorTypes {
     TooFewElements,
     WrongData,
     InvalidTypes,
+    ClosureError,
     Raw(String),
 }
 
@@ -102,6 +103,16 @@ pub struct TypeCheckError {
     pub wanted: Vec<Types>,
     pub got: Vec<Types>,
     pub expl: &'static str,
+}
+
+impl TypeCheckError {
+    pub fn is_error(&self) -> bool {
+        if ErrorTypes::None == self.error {
+            false
+        } else {
+            true
+        }
+    }
 }
 
 impl Display for TypeCheckError {
@@ -156,6 +167,9 @@ impl Display for ErrorTypes {
             }
             ErrorTypes::WrongData => {
                 "Stack contains invalid data at that point".to_string()
+            }
+            ErrorTypes::ClosureError => {
+                "Could not create closure for operation".to_string()
             }
             ErrorTypes::Raw(str) => {
                 str.clone()

@@ -77,7 +77,7 @@ static INCLUDE_MAP: SyncLazy<HashMap<String, HashMap<String, Internal>>> = SyncL
 });
 
 
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Copy, Hash)]
 pub enum Internal {
     NoOp,
     Print,

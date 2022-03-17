@@ -10,7 +10,8 @@ use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator};
 use crate::opt::resolve_opt;
 use crate::util::{compiler_error, compiler_error_str, compiler_warning};
 use crate::util::internals::{Internal, to_internal};
-use crate::util::operation::{JumpOffset, Operand, Operation, OperationType};
+use crate::util::operation::{JumpOffset, Operand, Operation, OperationData, OperationType};
+use crate::util::operations::{calling_runtime, calling_typecheck, internals_runtime, internals_typecheck, simple_runtime, simple_typecheck};
 use crate::util::position::Position;
 use crate::util::token::*;
 use crate::util::token::TokenType::Function as TokenFunction;
@@ -21,8 +22,11 @@ use crate::vm::MAX_CALL_STACK_SIZE;
 static MAX_INCL_DEPTH: u8 = 3;
 
 #[derive(Debug, Clone)]
+pub struct FunctionData(String, Vec<Types>, Vec<Types>);
+
+#[derive(Clone)]
 pub struct Function {
-    data: (String, Vec<Types>, Vec<Types>),
+    pub(crate) data: FunctionData,
     pub(crate) operations: Vec<(Position, Operation)>,
 }
 
@@ -31,16 +35,18 @@ impl Function {
         (self.data.1.clone(), self.data.2.clone())
     }
 
-    pub fn type_check(&self, functions: &HashMap<String, Function>, stack: &mut Vec<Types>) -> TypeCheckError {
+    pub fn type_check(&self, functions: HashMap<String, Function>, stack: &mut Vec<Types>) -> TypeCheckError {
         self.operations.iter()
             .fold(ErrorTypes::None.into(), |acc, op| {
-                let type_check = op.1.type_check(functions, stack, true);
+                let type_check: TypeCheckError = op.1.type_check(&functions, stack, true).into();
 
-                if type_check.error != ErrorTypes::None {
+                if type_check.is_error() {
                     let op = op.clone();
-                    let typ = op.1.typ.clone();
-                    let operand = op.1.operand.clone();
-                    compiler_warning(format!("\r\nOperation caused type check failure. \r\nOperation Type: {:?} \r\nOperation Value: {:?}", typ, operand), op.clone().0);
+                    let data = op.1.data();
+                    let typ = &data.0;
+                    let operand = &data.2;
+                    let pos = data.1.location().clone();
+                    compiler_warning(format!("\r\nOperation caused type check failure. \r\nOperation Type: {:?} \r\nOperation Value: {:?}", typ, operand), pos);
                     type_check
                 } else {
                     acc
@@ -174,7 +180,7 @@ impl State {
                         TokenType::Function => {
                             if let TokenValue::Function(name, inp, outp) = value {
                                 self.in_fn = Some(Function {
-                                    data: (name.clone(), inp.clone(), outp.clone()),
+                                    data: FunctionData(name.clone(), inp.clone(), outp.clone()),
                                     operations: vec![],
                                 })
                             } else {
@@ -205,51 +211,52 @@ impl State {
 
                                 let (inp, outp) = self.functions.get(&func_name).unwrap();
 
-                                vec![Operation {
-                                    typ: OperationType::PushFunction,
-                                    token,
-                                    operand: Some(Operand::PushFunction(func_name, inp.clone(), outp.clone())),
-                                }]
+                                vec![
+                                    Operation::new(
+                                        OperationData(OperationType::Push, token, Some(Operand::PushFunction(func_name, inp.clone(), outp.clone()))),
+                                        simple_runtime::create_push(),
+                                        simple_typecheck::create_push_type_check(),
+                                    )
+                                ]
                             } else if self.functions.contains_key(&text) {
-                                vec![Operation {
-                                    typ: OperationType::Call,
-                                    token,
-                                    operand: Some(Operand::Call(text)),
-                                }]
+                                vec![Operation::new(OperationData(OperationType::Call, token, Some(Operand::Call(text))),
+                                                    calling_runtime::create_fn(),
+                                                    calling_typecheck::create_push_type_check(), )]
                             } else {
                                 let internal = to_internal(sys_libs, value, pos.clone());
-                                vec![Operation {
-                                    typ: OperationType::Internal,
-                                    token,
-                                    operand: Some(Operand::Internal(internal)),
-                                }]
+                                vec![Operation::new(
+                                    OperationData(OperationType::Internal, token, Some(Operand::Internal(internal))),
+                                    internals_runtime::get_internal_executor(internal),
+                                    internals_typecheck::get_internal_typecheck(internal),
+                                )]
                             }
                         }
-                        TokenType::Int => {
+                        TokenType::Int | TokenType::Str => {
                             let token = token.clone();
 
-                            vec![Operation {
-                                typ: OperationType::PushInt,
-                                token,
-                                operand: Some(Operand::Int(*if let TokenValue::Int(val) = value {
+                            let operand = if token.typ() == &TokenType::Int {
+                                Operand::Int(*if let TokenValue::Int(val) = value {
                                     val
                                 } else {
                                     compiler_error_str("Internal parser error occurred", pos);
                                     unreachable!();
-                                })),
-                            }]
-                        }
-                        TokenType::Str => {
-                            vec![Operation {
-                                typ: OperationType::PushStr,
-                                token: token.clone(),
-                                operand: Some(Operand::Str(if let TokenValue::String(str) = value {
+                                })
+                            } else {
+                                Operand::Str(if let TokenValue::String(str) = value {
                                     str.clone()
                                 } else {
                                     compiler_error_str("Internal parser error occurred", pos);
                                     unreachable!();
-                                })),
-                            }]
+                                })
+                            };
+
+                            vec![
+                                Operation::new(
+                                    OperationData(OperationType::Push, token, Some(operand)),
+                                    simple_runtime::create_push(),
+                                    simple_typecheck::create_push_type_check(),
+                                )
+                            ]
                         }
                         TokenType::Keyword => {
                             let mut ops = vec![];
@@ -260,15 +267,15 @@ impl State {
                                         compiler_error_str("Include is only allowed on the top level", pos.clone());
                                     }
                                     Keyword::Call | Keyword::CallIf => {
-                                        ops.push(Operation {
-                                            typ: if keyword.clone() == Keyword::Call {
+                                        ops.push(Operation::new(OperationData(
+                                            if keyword.clone() == Keyword::Call {
                                                 OperationType::Call
                                             } else {
                                                 OperationType::CallIf
-                                            },
-                                            token,
-                                            operand: None,
-                                        })
+                                            }, token, None),
+                                                                calling_runtime::create_fn(),
+                                                                calling_typecheck::create_push_type_check(),
+                                        ))
                                     }
                                     Keyword::End => {
                                         self.operations.insert(function.data.clone().0, function);
@@ -286,11 +293,11 @@ impl State {
                         }
                         TokenType::FunctionPtr => {
                             if let TokenValue::Function(name, inp, outp) = token.value().clone() {
-                                vec![Operation {
-                                    typ: OperationType::PushFunction,
-                                    token,
-                                    operand: Some(Operand::PushFunction(name, inp, outp)),
-                                }]
+                                vec![Operation::new(
+                                    OperationData(OperationType::Push, token, Some(Operand::PushFunction(name, inp, outp))),
+                                    simple_runtime::create_push(),
+                                    simple_typecheck::create_push_type_check(),
+                                )]
                             } else {
                                 compiler_error_str("Internal parser error occurred", pos);
                                 unreachable!();
@@ -298,9 +305,9 @@ impl State {
                         }
                     };
 
-                    to_add.iter().for_each(|to_add| {
+                    to_add.into_iter().for_each(|to_add| {
                         let pos = pos.clone();
-                        function.operations.push((pos, to_add.clone()));
+                        function.operations.push((pos, to_add));
                     });
 
                     if self.in_fn.is_some() {
@@ -314,8 +321,7 @@ impl State {
             }
         }
 
-        if self.in_fn.is_some() {
-            let fnc = self.in_fn.clone().unwrap();
+        if let Some(ref fnc) = self.in_fn {
             compiler_error(format!("Unclosed function {}", fnc.data.0), Position::default())
         }
 
@@ -324,13 +330,13 @@ impl State {
             (entry.clone().0.clone(), Function {
                 data: entry.1.data.clone(),
                 operations: entry.1.operations.iter().map(|op| {
-                    if op.1.typ == OperationType::PushFunction {
+                    if op.1.data.0 == OperationType::Push {
                         let mut operation = op.1.clone();
 
-                        if let Operand::Str(func_name) = operation.operand.clone().unwrap() {
-                            let (name, inp, outp) = self.operations.get(&func_name).unwrap().data.clone();
+                        if let Operand::Str(func_name) = operation.data.2.clone().unwrap() {
+                            let FunctionData(name, inp, outp) = self.operations.get(&func_name).unwrap().data.clone();
 
-                            operation.operand = Some(Operand::PushFunction(name, inp, outp));
+                            operation.data.2 = Some(Operand::PushFunction(name, inp, outp));
                         }
 
                         (op.0.clone(), operation)
@@ -343,10 +349,10 @@ impl State {
     }
 
     pub fn type_check(self) -> Result<VM, String> {
-        for (name, function) in self.operations.clone() {
+        for (name, function) in &self.operations {
             let mut stack = function.get_contract().0;
 
-            let type_check = function.type_check(&self.operations, &mut stack);
+            let type_check = function.type_check(self.operations.clone(), &mut stack);
 
             if type_check.error != ErrorTypes::None {
                 return Err(format!("Function {} failed type check: {}", name, type_check));
@@ -361,8 +367,8 @@ impl State {
         Ok(VM::from(self))
     }
 
-    pub fn get_ops(&self) -> HashMap<String, Function> {
-        self.operations.clone()
+    pub fn get_ops(&self) -> &HashMap<String, Function> {
+        &self.operations
     }
 }
 

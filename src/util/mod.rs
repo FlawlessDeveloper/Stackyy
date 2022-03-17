@@ -6,6 +6,7 @@ pub mod operation;
 pub mod internals;
 pub mod register_type;
 pub mod type_check;
+pub mod operations;
 
 pub fn compiler_error(msg: String, pos: Position) {
     panic!("ERROR at {} -> {}", pos, msg);
