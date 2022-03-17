@@ -16,6 +16,7 @@ pub type JumpOffset = u32;
 #[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Debug)]
 pub enum OperationType {
     Push,
+    PushFunction,
     Internal,
     Jump,
     JumpIf,

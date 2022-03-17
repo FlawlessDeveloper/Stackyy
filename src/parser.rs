@@ -213,7 +213,7 @@ impl State {
 
                                 vec![
                                     Operation::new(
-                                        OperationData(OperationType::Push, token, Some(Operand::PushFunction(func_name, inp.clone(), outp.clone()))),
+                                        OperationData(OperationType::PushFunction, token, Some(Operand::PushFunction(func_name, inp.clone(), outp.clone()))),
                                         simple_runtime::create_push(),
                                         simple_typecheck::create_push_type_check(),
                                     )
@@ -330,7 +330,7 @@ impl State {
             (entry.clone().0.clone(), Function {
                 data: entry.1.data.clone(),
                 operations: entry.1.operations.iter().map(|op| {
-                    if op.1.data.0 == OperationType::Push {
+                    if op.1.data.0 == OperationType::PushFunction {
                         let mut operation = op.1.clone();
 
                         if let Operand::Str(func_name) = operation.data.2.clone().unwrap() {
