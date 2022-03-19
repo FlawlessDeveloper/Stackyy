@@ -3,8 +3,8 @@
 
 ## Description:
 
-Stackyy is a stack based, virtual machine language inspired by 
-[Forth](https://en.wikipedia.org/wiki/Forth_(programming_language)) and 
+Stackyy is a stack based, virtual machine language inspired by
+[Forth](https://en.wikipedia.org/wiki/Forth_(programming_language)) and
 [Porth](https://gitlab.com/tsoding/porth).
 
 ## Usage:
@@ -12,6 +12,10 @@ Stackyy is a stack based, virtual machine language inspired by
 1. Download the repo
 2. Run ``cargo run -- --help`` for a list of all commands
 
+## Building for release.
+
+To use the standard optimizations run ``cargo build --release``.  
+If the binary size is unsatifying run ``cargo build --profile=release-opt``
 
 ## ToDo:
 
