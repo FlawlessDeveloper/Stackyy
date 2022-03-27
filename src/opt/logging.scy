@@ -12,3 +12,8 @@ end
     "[ X ] " print
     println
 end
+
+@debug(str->)
+    "[ D ] " print
+    println
+end
