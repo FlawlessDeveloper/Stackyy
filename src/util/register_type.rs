@@ -28,7 +28,7 @@ impl RegisterType {
                 Some(format!("*{:#x}", pointer))
             }
             RegisterType::String(str) => {
-                Some(format!("\"{}\"", str))
+                Some(str.clone())
             }
             RegisterType::Bool(bool) => {
                 Some(bool.to_string())
