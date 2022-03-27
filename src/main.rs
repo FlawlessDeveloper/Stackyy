@@ -2,11 +2,11 @@
 #![feature(trusted_random_access)]
 #![feature(once_cell)]
 #![feature(fn_traits)]
+#![feature(trivial_bounds)]
 
-use std::fmt::Arguments;
 use std::fs::OpenOptions;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::exit;
 
 use backtrace::Backtrace;

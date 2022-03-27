@@ -205,6 +205,15 @@ pub mod typecheck {
                         }
                     }
                 }
+                Internal::ToString => {
+                    if stack.len() == 0 {
+                        ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Any], tmp_stack)
+                    } else {
+                        let _ = stack.pop().unwrap();
+                        stack.push(Types::String);
+                        ErrorTypes::None.into()
+                    }
+                }
             }
         })
     }
@@ -217,39 +226,27 @@ pub mod runtime {
     use crate::{Position, VM};
     use crate::util::internals::Internal;
     use crate::util::operation::OperationData;
+    use crate::util::operations::DescriptorAction;
     use crate::util::register_type::RegisterType;
     use crate::util::runtime_error_str;
 
     fn noop(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {}
 
     fn print(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {
-        let reg = stack.pop().unwrap();
-        match reg {
-            RegisterType::Int(int) => {
-                print!("{}", int);
-            }
-            RegisterType::Pointer(pointer) => {
-                print!("*{:#x}", pointer);
-            }
-            RegisterType::String(str) => {
-                print!("{}", str)
-            }
-            RegisterType::Bool(bool) => {
-                print!("{}", bool)
-            }
-            RegisterType::Function(name, ..) => {
-                print!("*{}()", name)
-            }
-            RegisterType::Empty => {
-                runtime_error_str("Stack is empty", position.clone());
+        to_string(internal, stack, position);
+        if let RegisterType::String(str) = stack.pop().unwrap() {
+            if internal == Internal::PrintLn {
+                println!("{str}");
+            } else {
+                print!("{str}");
+                stdout().flush().unwrap();
             }
         }
+    }
 
-        if internal == Internal::PrintLn {
-            println!();
-        } else {
-            stdout().flush().unwrap();
-        }
+    fn to_string(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {
+        let reg = stack.pop().unwrap();
+        reg.to_string_stacked(position, stack);
     }
 
     fn swap(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {
@@ -260,7 +257,11 @@ pub mod runtime {
     }
 
     fn drop(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {
-        stack.pop().unwrap();
+        if let RegisterType::Descriptor(descr) = stack.pop().unwrap() {
+            let mut locked = descr.lock();
+            let locked = locked.as_mut().unwrap();
+            locked.action(DescriptorAction::Close, stack);
+        }
     }
 
     fn dup(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {
@@ -284,7 +285,14 @@ pub mod runtime {
     }
 
     fn dbg_stack(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {
-        println!("{:#?}", stack);
+        for (index, item) in stack.iter().enumerate() {
+            let str = if let Some(str) = item.to_string() {
+                str
+            } else {
+                "No representation".to_string()
+            };
+            println!("[{}] -> {}", index, str)
+        }
     }
 
     fn math(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {

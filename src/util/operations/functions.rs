@@ -42,20 +42,25 @@ pub mod typecheck {
             if success.error == ErrorTypes::None {
                 if stack.len() >= inp.len() {
                     let success = {
-                        let mut tmp_inp = inp.clone();
-                        let mut tmp_stack = stack.clone();
-                        if inp.len() <= tmp_stack.len() {
-                            let mut success = true;
-                            while tmp_stack.len() > 0 {
-                                let a = tmp_inp.pop().unwrap();
-                                let b = tmp_stack.pop().unwrap();
-                                if a != b {
-                                    success = false;
-                                }
-                            }
-                            success
+                        if inp.len() == 0 {
+                            true
                         } else {
-                            false
+                            let mut tmp_inp = inp.clone();
+                            let mut tmp_stack = stack.clone();
+                            if inp.len() <= tmp_stack.len() {
+                                let mut success = true;
+                                while tmp_inp.len() > 0 {
+                                    let a = tmp_inp.pop().unwrap();
+                                    let b = tmp_stack.pop().unwrap();
+                                    if a != b {
+                                        success = false;
+                                        break;
+                                    }
+                                }
+                                success
+                            } else {
+                                false
+                            }
                         }
                     };
 

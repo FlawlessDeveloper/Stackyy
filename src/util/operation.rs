@@ -2,14 +2,13 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 
-use crate::{compiler_error, compiler_error_str, VM};
+use crate::{compiler_error_str, VM};
 use crate::parser::Function;
-use crate::util::{compiler_warning, compiler_warning_str};
-use crate::util::internals::{Internal, type_check};
-use crate::util::position::Position;
-use crate::util::register_type::RegisterType;
+use crate::util::compiler_warning_str;
+use crate::util::internals::Internal;
+use crate::util::operations::DescriptorAction;
 use crate::util::token::Token;
-use crate::util::type_check::{ErrorTypes, TypeCheckError, Types};
+use crate::util::type_check::{TypeCheckError, Types};
 
 pub type JumpOffset = u32;
 
@@ -18,6 +17,7 @@ pub enum OperationType {
     Push,
     PushFunction,
     Internal,
+    Descriptor,
     Jump,
     JumpIf,
     Call,
@@ -33,6 +33,7 @@ pub enum Operand {
     Jump(JumpOffset),
     PushFunction(String, Vec<Types>, Vec<Types>),
     Call(String),
+    DescriptorAction(String, String)
 }
 
 #[derive(Debug, Clone)]

@@ -1,19 +1,22 @@
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter, write};
 use std::lazy::SyncLazy;
+use std::rc::Rc;
+use std::sync::Mutex;
 
 use crate::util::{compiler_error, compiler_error_str};
+use crate::util::operations::Descriptor as TDescriptor;
 use crate::util::position::Position;
-use crate::util::type_check::Types::{Bool, Function, FunctionPointer, Int, Pointer, String as TString};
 
 static TYPES_MAP: SyncLazy<HashMap<String, Types>> = SyncLazy::new(|| {
     let mut map = HashMap::new();
 
-    map.insert("int".to_string(), Int);
-    map.insert("str".to_string(), TString);
-    map.insert("bool".to_string(), Bool);
-    map.insert("ptr".to_string(), Pointer);
-    map.insert("fn".to_string(), Function);
+    map.insert("int".to_string(), Types::Int);
+    map.insert("str".to_string(), Types::String);
+    map.insert("bool".to_string(), Types::Bool);
+    map.insert("ptr".to_string(), Types::Pointer);
+    map.insert("fn".to_string(), Types::Function);
+    map.insert("rsc".to_string(), Types::Descriptor);
 
     map
 });
@@ -27,6 +30,7 @@ pub enum Types {
     Pointer,
     Function,
     FunctionPointer(Vec<Types>, Vec<Types>),
+    Descriptor,
 }
 
 impl Into<String> for Types {
@@ -53,11 +57,14 @@ impl Into<String> for Types {
                 }).replacen(",", "", 1);
                 format!("fn-ptr({}->{})", inp, out)
             }
+            Types::Descriptor => {
+                "rsc".to_string()
+            }
         }
     }
 }
 
-#[derive(Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum ErrorTypes {
     None,
     TooFewElements,
@@ -96,8 +103,18 @@ impl ErrorTypes {
             expl,
         }
     }
+
+    pub fn into_txt(self, expl: &'static str) -> TypeCheckError {
+        TypeCheckError {
+            error: self,
+            wanted: vec![],
+            got: vec![],
+            expl,
+        }
+    }
 }
 
+#[derive(Debug)]
 pub struct TypeCheckError {
     pub error: ErrorTypes,
     pub wanted: Vec<Types>,

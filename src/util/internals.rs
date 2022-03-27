@@ -2,16 +2,16 @@ use std::collections::HashMap;
 use std::lazy::SyncLazy;
 
 use crate::util::{compiler_error, compiler_error_str};
-use crate::util::internals::Internal::{Cubed, DbgStack, Div, Drop, DropStack, Dup, DupStack, Equals, Larger, LargerEq, Minus, Modulo, Mult, NoOp, Not, NotPeek, Plus, Print, PrintLn, ReflectionClear, ReflectionPush, ReflectionRemoveStr, ReflectionRemoveStrDrop, RevStack, Smaller, SmallerEq, Squared, Swap};
 use crate::util::position::Position;
 use crate::util::token::TokenValue;
 use crate::util::type_check::{ErrorTypes, TypeCheckError, Types};
 
-static INTERNALS_MAP: SyncLazy<HashMap<String, Internal>> = SyncLazy::new(|| {
+static INTERNALS_MAP: SyncLazy<HashMap<&'static str, Internal>> = SyncLazy::new(|| {
     let mut map = HashMap::new();
-    map.insert("noop".to_string(), NoOp);
-    map.insert("print".to_string(), Print);
-    map.insert("println".to_string(), PrintLn);
+    map.insert("noop", Internal::NoOp);
+    map.insert("print", Internal::Print);
+    map.insert("println", Internal::PrintLn);
+    map.insert("to-string", Internal::ToString);
     map
 });
 
@@ -21,58 +21,59 @@ static _INTERNALS_MAP: SyncLazy<HashMap<String, Internal>> = SyncLazy::new(|| {
     map
 });
 
-static REFLECTION_INTERNALS_MAP: SyncLazy<HashMap<String, Internal>> = SyncLazy::new(|| {
+
+static REFLECTION_INTERNALS_MAP: SyncLazy<HashMap<&'static str, Internal>> = SyncLazy::new(|| {
     let mut map = HashMap::new();
-    map.insert("ref-rem-str-drop".to_string(), ReflectionRemoveStrDrop);
-    map.insert("ref-rem-str".to_string(), ReflectionRemoveStr);
-    map.insert("ref-push".to_string(), ReflectionPush);
-    map.insert("ref-clear".to_string(), ReflectionClear);
+    map.insert("ref-rem-str-drop", Internal::ReflectionRemoveStrDrop);
+    map.insert("ref-rem-str", Internal::ReflectionRemoveStr);
+    map.insert("ref-push", Internal::ReflectionPush);
+    map.insert("ref-clear", Internal::ReflectionClear);
     map
 });
 
-static STACK_OPS_INTERNALS_MAP: SyncLazy<HashMap<String, Internal>> = SyncLazy::new(|| {
+static STACK_OPS_INTERNALS_MAP: SyncLazy<HashMap<&'static str, Internal>> = SyncLazy::new(|| {
     let mut map = HashMap::new();
-    map.insert("swap".to_string(), Swap);
-    map.insert("drop".to_string(), Drop);
-    map.insert("swap".to_string(), Swap);
-    map.insert("dup".to_string(), Dup);
-    map.insert("rev-stack".to_string(), RevStack);
-    map.insert("drop-stack".to_string(), DropStack);
-    map.insert("dup-stack".to_string(), DupStack);
-    map.insert("dbg-stack".to_string(), DbgStack);
+    map.insert("swap", Internal::Swap);
+    map.insert("drop", Internal::Drop);
+    map.insert("swap", Internal::Swap);
+    map.insert("dup", Internal::Dup);
+    map.insert("rev-stack", Internal::RevStack);
+    map.insert("drop-stack", Internal::DropStack);
+    map.insert("dup-stack", Internal::DupStack);
+    map.insert("dbg-stack", Internal::DbgStack);
     map
 });
 
-static BASIC_MATH_INTERNALS_MAP: SyncLazy<HashMap<String, Internal>> = SyncLazy::new(|| {
+static BASIC_MATH_INTERNALS_MAP: SyncLazy<HashMap<&'static str, Internal>> = SyncLazy::new(|| {
     let mut map = HashMap::new();
-    map.insert("+".to_string(), Plus);
-    map.insert("-".to_string(), Minus);
-    map.insert("*".to_string(), Mult);
-    map.insert("/".to_string(), Div);
-    map.insert("%".to_string(), Modulo);
-    map.insert("squared".to_string(), Squared);
-    map.insert("cubed".to_string(), Cubed);
+    map.insert("+", Internal::Plus);
+    map.insert("-", Internal::Minus);
+    map.insert("*", Internal::Mult);
+    map.insert("/", Internal::Div);
+    map.insert("%", Internal::Modulo);
+    map.insert("squared", Internal::Squared);
+    map.insert("cubed", Internal::Cubed);
     map
 });
 
-static BOOL_INTERNALS_MAP: SyncLazy<HashMap<String, Internal>> = SyncLazy::new(|| {
+static BOOL_INTERNALS_MAP: SyncLazy<HashMap<&'static str, Internal>> = SyncLazy::new(|| {
     let mut map = HashMap::new();
-    map.insert("!".to_string(), Not);
-    map.insert("@!".to_string(), NotPeek);
-    map.insert("=".to_string(), Equals);
-    map.insert("<".to_string(), Larger);
-    map.insert(">".to_string(), Smaller);
-    map.insert("<=".to_string(), LargerEq);
-    map.insert(">=".to_string(), SmallerEq);
+    map.insert("!", Internal::Not);
+    map.insert("@!", Internal::NotPeek);
+    map.insert("=", Internal::Equals);
+    map.insert("<", Internal::Larger);
+    map.insert(">", Internal::Smaller);
+    map.insert("<=", Internal::LargerEq);
+    map.insert(">=", Internal::SmallerEq);
     map
 });
 
-static INCLUDE_MAP: SyncLazy<HashMap<String, HashMap<String, Internal>>> = SyncLazy::new(|| {
+static INCLUDE_MAP: SyncLazy<HashMap<&'static str, &'static HashMap<&'static str, Internal>>> = SyncLazy::new(|| {
     let mut map = HashMap::new();
-    map.insert("std/bool".to_string(), BOOL_INTERNALS_MAP.clone());
-    map.insert("std/simple-maths".to_string(), BASIC_MATH_INTERNALS_MAP.clone());
-    map.insert("std/stack-ops".to_string(), STACK_OPS_INTERNALS_MAP.clone());
-    map.insert("std/reflection".to_string(), REFLECTION_INTERNALS_MAP.clone());
+    map.insert("std/bool", &*BOOL_INTERNALS_MAP);
+    map.insert("std/simple-maths", &*BASIC_MATH_INTERNALS_MAP);
+    map.insert("std/stack-ops", &*STACK_OPS_INTERNALS_MAP);
+    map.insert("std/reflection", &*REFLECTION_INTERNALS_MAP);
     map
 });
 
@@ -82,6 +83,7 @@ pub enum Internal {
     NoOp,
     Print,
     PrintLn,
+    ToString,
     Swap,
     Drop,
     Dup,
@@ -112,7 +114,7 @@ pub enum Internal {
 pub fn to_internal(includes: Vec<String>, str: &TokenValue, pos: Position) -> Internal {
     if let TokenValue::String(str) = str {
         let ops = includes.iter().fold(INTERNALS_MAP.clone(), |mut acc, include| {
-            if let Some(include) = INCLUDE_MAP.get(include) {
+            if let Some(include) = INCLUDE_MAP.get(include.as_str()) {
                 acc.extend(include.clone())
             } else {
                 compiler_error(format!("The system lib: {} was not found", include), pos.clone());
@@ -121,7 +123,7 @@ pub fn to_internal(includes: Vec<String>, str: &TokenValue, pos: Position) -> In
             acc
         });
 
-        if let Some(op) = ops.get(str) {
+        if let Some(op) = ops.get(str.as_str()) {
             op.clone()
         } else {
             compiler_error(format!("The internal call {} does not exist or is not included", str), pos);
@@ -130,205 +132,5 @@ pub fn to_internal(includes: Vec<String>, str: &TokenValue, pos: Position) -> In
     } else {
         compiler_error_str("Internal parser error occurred", pos);
         unreachable!()
-    }
-}
-
-pub fn type_check(int: Internal, stack: &mut Vec<Types>) -> TypeCheckError {
-    let tmp_stack = stack.clone();
-
-    match int {
-        NoOp | DbgStack => {
-            ErrorTypes::None.into()
-        }
-        Print | PrintLn => {
-            if stack.len() == 0 {
-                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Any, Types::Any], tmp_stack)
-            } else {
-                stack.pop();
-                ErrorTypes::None.into()
-            }
-        }
-        Swap => {
-            if stack.len() < 2 {
-                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Any, Types::Any], tmp_stack)
-            } else {
-                let a = stack.pop().unwrap();
-                let b = stack.pop().unwrap();
-                stack.push(a);
-                stack.push(b);
-                ErrorTypes::None.into()
-            }
-        }
-        Drop => {
-            if stack.len() == 0 {
-                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Any], tmp_stack)
-            } else {
-                stack.pop();
-                ErrorTypes::None.into()
-            }
-        }
-        Dup => {
-            if stack.len() == 0 {
-                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Any], tmp_stack)
-            } else {
-                let last = stack.last().unwrap().clone();
-                stack.push(last);
-                ErrorTypes::None.into()
-            }
-        }
-        RevStack => {
-            stack.reverse();
-            ErrorTypes::None.into()
-        }
-        DropStack => {
-            stack.clear();
-            ErrorTypes::None.into()
-        }
-        DupStack => {
-            stack.extend(stack.clone());
-            ErrorTypes::None.into()
-        }
-        Plus | Minus | Mult | Div | Modulo => {
-            if stack.len() < 2 {
-                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Int, Types::Int], tmp_stack)
-            } else {
-                let a = stack.pop().unwrap();
-                let b = stack.pop().unwrap();
-
-                if a != Types::Int || b != Types::Int {
-                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Int, Types::Int], tmp_stack)
-                } else {
-                    stack.push(Types::Int);
-                    ErrorTypes::None.into()
-                }
-            }
-        }
-        Squared | Cubed => {
-            if stack.len() == 0 {
-                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Int], tmp_stack)
-            } else {
-                let last = stack.last().unwrap().clone();
-                if last == Types::Int {
-                    ErrorTypes::None.into()
-                } else {
-                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Int, Types::Int], tmp_stack)
-                }
-            }
-        }
-        Not | NotPeek => {
-            if stack.len() == 0 {
-                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Int], tmp_stack)
-            } else {
-                let last = if int == Internal::Not {
-                    stack.pop().unwrap().clone()
-                } else {
-                    stack.last().unwrap().clone()
-                };
-                if last == Types::Bool {
-                    stack.push(Types::Bool);
-                    ErrorTypes::None.into()
-                } else {
-                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Bool], tmp_stack)
-                }
-            }
-        }
-        Equals | Larger | Smaller | LargerEq | SmallerEq => {
-            const ALLOWED_TYPES: [Types; 3] = [Types::Int, Types::String, Types::Bool];
-
-            if stack.len() < 2 {
-                ErrorTypes::TooFewElements.into_with_ctx_plus(vec![Types::Any, Types::Any], tmp_stack, "There are only int, string, bool allowed")
-            } else {
-                let a = stack.pop().unwrap();
-                let b = stack.pop().unwrap();
-
-                if ALLOWED_TYPES.contains(&a) && ALLOWED_TYPES.contains(&b) {
-                    if a == b {
-                        stack.push(Types::Bool);
-                        ErrorTypes::None.into()
-                    } else {
-                        ErrorTypes::InvalidTypes.into_with_ctx(vec![a.clone(), a.clone()], stack.clone())
-                    }
-                } else {
-                    ErrorTypes::InvalidTypes.into_with_ctx_plus(vec![Types::Any, Types::Any], tmp_stack, "There are only int, string, bool allowed")
-                }
-            }
-        }
-        ReflectionRemoveStr => {
-            if stack.len() < 2 {
-                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Int, Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
-            } else {
-                let fnc = stack.pop().unwrap();
-
-                if let Types::FunctionPointer(_, _) = fnc {
-                    let amount = stack.pop().unwrap();
-                    if amount == Types::Int {
-                        stack.push(Types::String);
-                        stack.push(fnc.clone());
-                        ErrorTypes::None.into()
-                    } else {
-                        ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Int, Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
-                    }
-                } else {
-                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Int, Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
-                }
-            }
-        }
-        ReflectionRemoveStrDrop => {
-            if stack.len() < 2 {
-                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::Int, Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
-            } else {
-                let fnc = stack.pop().unwrap();
-
-                if let Types::FunctionPointer(_, _) = fnc {
-                    let amount = stack.pop().unwrap();
-                    if amount == Types::Int {
-                        stack.push(fnc.clone());
-                        ErrorTypes::None.into()
-                    } else {
-                        ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Int, Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
-                    }
-                } else {
-                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::Int, Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
-                }
-            }
-        }
-        ReflectionPush => {
-            if stack.len() < 2 {
-                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::String, Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
-            } else {
-                let fnc = stack.pop().unwrap();
-                let str = stack.pop().unwrap();
-
-                if let Types::FunctionPointer(_, _) = fnc {
-                    if str == Types::String {
-                        stack.push(fnc.clone());
-                        ErrorTypes::None.into()
-                    } else {
-                        ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::String, Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
-                    }
-                } else {
-                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::String, Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
-                }
-            }
-        }
-        ReflectionClear => {
-            if stack.len() == 0 {
-                ErrorTypes::TooFewElements.into_with_ctx(vec![Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
-            } else {
-                let fnc = stack.pop().unwrap();
-
-                if let Types::FunctionPointer(_, _) = fnc {
-                    let amount = stack.pop().unwrap();
-                    if amount == Types::String {
-                        stack.push(fnc.clone());
-                        ErrorTypes::None.into()
-                    } else {
-                        ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
-                    }
-                } else {
-                    ErrorTypes::InvalidTypes.into_with_ctx(vec![Types::FunctionPointer(vec![Types::Any], vec![Types::Any])], tmp_stack)
-                }
-            }
-        }
     }
 }

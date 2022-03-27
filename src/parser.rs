@@ -11,7 +11,7 @@ use crate::opt::resolve_opt;
 use crate::util::{compiler_error, compiler_error_str, compiler_warning};
 use crate::util::internals::{Internal, to_internal};
 use crate::util::operation::{JumpOffset, Operand, Operation, OperationData, OperationType};
-use crate::util::operations::{calling_runtime, calling_typecheck, internals_runtime, internals_typecheck, simple_runtime, simple_typecheck};
+use crate::util::operations::{calling_runtime, calling_typecheck, descriptors_runtime, descriptors_typecheck, internals_runtime, internals_typecheck, simple_runtime, simple_typecheck};
 use crate::util::position::Position;
 use crate::util::token::*;
 use crate::util::token::TokenType::Function as TokenFunction;
@@ -200,7 +200,28 @@ impl State {
 
                             let text = token.text().to_string();
 
-                            if text.starts_with("~") && {
+                            if text.starts_with("!") {
+                                let mut token_tmp = text.clone();
+
+                                token_tmp.remove(0);
+                                if token_tmp.split_once("-").is_none() {
+                                    compiler_error_str("Invalid ressource operation.", pos.clone());
+                                    unreachable!()
+                                }
+
+                                if let Some((typ, action)) = token_tmp.split_once("-") {
+                                    vec![
+                                        Operation::new(
+                                            OperationData(OperationType::Descriptor, token, Some(Operand::DescriptorAction(typ.to_owned(), action.to_owned()))),
+                                            descriptors_runtime(),
+                                            descriptors_typecheck(),
+                                        )
+                                    ]
+                                } else {
+                                    compiler_error_str("Invalid ressource operation.", pos.clone());
+                                    unreachable!()
+                                }
+                            } else if text.starts_with("~") && {
                                 let mut token = text.clone();
                                 token.remove(0);
 
@@ -359,7 +380,7 @@ impl State {
             }
 
             if stack != function.get_contract().1 {
-                return Err(format!("Function {} failed type check! You still have unused elements left", name));
+                return Err(format!("Function {} failed type check! You still have unused elements left. Elements are: {:?}", name, stack));
             }
         }
 
