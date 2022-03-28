@@ -95,8 +95,13 @@ impl VM {
             runtime_error_str("Stack overflow", position.clone());
         }
 
+
         if self.type_stack.len() != self.stack.len() {
-            runtime_error(format!("Typecheck desync happened. Responsible operation: {:#?}", self.last_op.clone().unwrap()), position.clone());
+            if cfg!(debug_assertions) {
+                runtime_error(format!("Typecheck desync happened.\r\nResponsible operation: {:#?}\r\nStack {:?}\r\nTypestack {:?}", self.last_op.clone().unwrap(), self.stack, self.type_stack), position.clone());
+            } else {
+                runtime_error(format!("Typecheck desync happened. Please create a issue on github"), position.clone());
+            }
         }
 
         let tc_error = (typecheck(data, &self.ops, &mut self.type_stack, false)).is_error();
