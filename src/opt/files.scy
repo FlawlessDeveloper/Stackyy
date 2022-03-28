@@ -1,0 +1,21 @@
+include "@std/stack-ops"
+
+@create-test-file(str->)
+    !file-open
+    "If you can read this it works :D"
+    !file-write-all
+    drop
+end
+
+@write-to-file(str,str->)
+    !file-open
+    swap
+    !file-write-all
+    drop
+end
+
+@read-from-file(str->str)
+    !file-open
+    !file-read-all
+    drop
+end

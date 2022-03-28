@@ -12,6 +12,7 @@ pub fn resolve_opt(str: &str) -> String {
 
     let incl = match str.as_str() {
         "logging" => include_str!("logging.scy"),
+        "files" => include_str!("files.scy"),
         _ => {
             compiler_error(format!("Invalid optional include path: {}", str), Position::default());
             unreachable!()
