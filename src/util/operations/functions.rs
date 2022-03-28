@@ -71,9 +71,9 @@ pub mod typecheck {
                             for _ in 0..inp.len() {
                                 stack.pop().unwrap();
                             }
-                        }
-                        for typ in outp {
-                            stack.push(typ.clone());
+                            for typ in outp {
+                                stack.push(typ.clone());
+                            }
                         }
                         ErrorTypes::None.into()
                     }
