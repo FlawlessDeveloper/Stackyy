@@ -2,6 +2,7 @@
     "Hello " print println
 end
 
+// Main function for funcs
 @main(->int)
     "World" greet
     "Flawlesscode" greet

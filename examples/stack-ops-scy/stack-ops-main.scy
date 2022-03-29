@@ -1,0 +1,17 @@
+include "@std/stack-ops"
+
+// Main function for stack-ops
+@main(->int)
+
+    // Swapping the top values of the stack
+    "Hello " "World" swap print println
+
+    // Dropping a value from the stack
+    "World" "Trash" "Hello " print drop println
+
+    // Reverse the whole stack
+    "a" "b" "c" "d" "e" "f" rev-stack
+    print print print print print println
+
+    0
+end

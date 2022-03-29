@@ -1,3 +1,4 @@
+// Main function for hello-world
 @main(->int)
     "Hello world" println
     0
