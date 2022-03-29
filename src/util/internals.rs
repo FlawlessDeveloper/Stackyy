@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::lazy::SyncLazy;
 
+use serde::{Deserialize, Serialize};
+
 use crate::util::{compiler_error, compiler_error_str};
 use crate::util::operation::OperationDataInfo;
 use crate::util::position::Position;
@@ -79,7 +81,7 @@ static INCLUDE_MAP: SyncLazy<HashMap<&'static str, &'static HashMap<&'static str
 });
 
 
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Copy, Hash)]
+#[derive(Serialize, Deserialize, Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Copy, Hash)]
 pub enum Internal {
     NoOp,
     Print,

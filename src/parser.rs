@@ -6,13 +6,15 @@ use std::path::{Path, PathBuf};
 
 use rayon::iter::ParallelIterator;
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator};
+use serde::{Deserialize, Serialize};
 
 use crate::args::Compile;
 use crate::opt::resolve_opt;
 use crate::util::{compiler_error, compiler_error_str, compiler_warning};
+use crate::util::compile::{CompiledFunction, CompiledProgram, ProgramMetadata};
 use crate::util::internals::{Internal, to_internal};
-use crate::util::operation::{JumpOffset, Operand, Operation, OperationData, OperationDataInfo, OperationType};
-use crate::util::operations::{calling_runtime, calling_typecheck, descriptors_runtime, descriptors_typecheck, internals_runtime, internals_typecheck, simple_runtime, simple_typecheck};
+use crate::util::operation::{Operand, Operation, OperationData, OperationDataInfo, OperationType};
+use crate::util::operations::{CALLING_RUNTIME, CALLING_TYPECHECK, DESCRIPTOR_RUNTIME, DESCRIPTOR_TYPECHECK, INTERNAL_RUNTIME, INTERNAL_TYPECHECK, SIMPLE_RUNTIME, SIMPLE_TYPECHECK};
 use crate::util::position::Position;
 use crate::util::token::*;
 use crate::util::token::TokenType::Function as TokenFunction;
@@ -22,7 +24,7 @@ use crate::vm::MAX_CALL_STACK_SIZE;
 
 static MAX_INCL_DEPTH: u8 = 3;
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FunctionData(String, Vec<Types>, Vec<Types>);
 
 #[derive(Clone)]
@@ -35,6 +37,7 @@ impl Function {
     pub fn get_contract(&self) -> (Vec<Types>, Vec<Types>) {
         (self.data.1.clone(), self.data.2.clone())
     }
+
 
     pub fn type_check(&self, functions: HashMap<String, Function>, stack: &mut Vec<Types>) -> TypeCheckError {
         self.operations.iter()
@@ -57,6 +60,9 @@ impl Function {
 
     pub fn name(&self) -> String {
         self.data.0.clone()
+    }
+    pub fn data(&self) -> &FunctionData {
+        &self.data
     }
 }
 
@@ -222,8 +228,8 @@ impl State {
                                     vec![
                                         Operation::new(
                                             OperationData::new(OperationType::Descriptor, token, &comp, Some(Operand::DescriptorAction(typ.to_owned(), action.to_owned()))),
-                                            descriptors_runtime(),
-                                            descriptors_typecheck(),
+                                            DESCRIPTOR_RUNTIME.clone(),
+                                            DESCRIPTOR_TYPECHECK.clone(),
                                         )
                                     ]
                                 } else {
@@ -244,20 +250,20 @@ impl State {
                                 vec![
                                     Operation::new(
                                         OperationData::new(OperationType::PushFunction, token, &comp, Some(Operand::PushFunction(func_name, inp.clone(), outp.clone()))),
-                                        simple_runtime::create_push(),
-                                        simple_typecheck::create_push_type_check(),
+                                        SIMPLE_RUNTIME.clone(),
+                                        SIMPLE_TYPECHECK.clone(),
                                     )
                                 ]
                             } else if self.functions.contains_key(&text) {
                                 vec![Operation::new(OperationData::new(OperationType::Call, token, &comp, Some(Operand::Call(text))),
-                                                    calling_runtime::create_fn(),
-                                                    calling_typecheck::create_push_type_check(), )]
+                                                    CALLING_RUNTIME.clone(),
+                                                    CALLING_TYPECHECK.clone(), )]
                             } else {
                                 let internal = to_internal(sys_libs, value, &op_data_info);
                                 vec![Operation::new(
                                     OperationData::new(OperationType::Internal, token, &comp, Some(Operand::Internal(internal))),
-                                    internals_runtime::get_internal_executor(internal),
-                                    internals_typecheck::get_internal_typecheck(internal),
+                                    INTERNAL_RUNTIME.clone(),
+                                    INTERNAL_TYPECHECK.clone(),
                                 )]
                             }
                         }
@@ -269,22 +275,20 @@ impl State {
                                     val
                                 } else {
                                     compiler_error_str("Internal parser error occurred", &op_data_info);
-                                    unreachable!();
                                 })
                             } else {
                                 Operand::Str(if let TokenValue::String(str) = value {
                                     str.clone()
                                 } else {
                                     compiler_error_str("Internal parser error occurred", &op_data_info);
-                                    unreachable!();
                                 })
                             };
 
                             vec![
                                 Operation::new(
                                     OperationData::new(OperationType::Push, token, &comp, Some(operand)),
-                                    simple_runtime::create_push(),
-                                    simple_typecheck::create_push_type_check(),
+                                    SIMPLE_RUNTIME.clone(),
+                                    SIMPLE_TYPECHECK.clone(),
                                 )
                             ]
                         }
@@ -303,8 +307,8 @@ impl State {
                                             } else {
                                                 OperationType::CallIf
                                             }, token, &comp, None),
-                                                                calling_runtime::create_fn(),
-                                                                calling_typecheck::create_push_type_check(),
+                                                                CALLING_RUNTIME.clone(),
+                                                                CALLING_TYPECHECK.clone(),
                                         ))
                                     }
                                     Keyword::End => {
@@ -325,8 +329,8 @@ impl State {
                             if let TokenValue::Function(name, inp, outp) = token.value().clone() {
                                 vec![Operation::new(
                                     OperationData::new(OperationType::Push, token, &comp, Some(Operand::PushFunction(name, inp, outp))),
-                                    simple_runtime::create_push(),
-                                    simple_typecheck::create_push_type_check(),
+                                    SIMPLE_RUNTIME.clone(),
+                                    SIMPLE_TYPECHECK.clone(),
                                 )]
                             } else {
                                 compiler_error_str("Internal parser error occurred", &op_data_info);
@@ -395,6 +399,38 @@ impl State {
 
 
         Ok(VM::from(self))
+    }
+
+    pub fn compile(self, meta: ProgramMetadata, readable: bool) -> Result<Vec<u8>, String> {
+        let vm = self.type_check()?;
+        let fncs = vm.ops().iter().map(|entry| {
+            let ops = entry.1.operations.iter().map(|op| {
+                let nop = op.1.data.clone();
+                (op.0.clone(), nop)
+            }).collect::<Vec<_>>();
+
+            let fn_data = entry.1.data.clone();
+
+            let fnc = CompiledFunction {
+                data: fn_data,
+                operations: ops,
+            };
+
+            (entry.0.clone(), fnc)
+        }).collect::<HashMap<_, _>>();
+
+        let program = CompiledProgram {
+            data: meta,
+            operations: fncs,
+        };
+
+        let res = if readable {
+            serde_yaml::to_vec(&program).unwrap()
+        } else {
+            bincode::serialize(&program).unwrap()
+        };
+
+        Ok(res)
     }
 
     pub fn get_ops(&self) -> &HashMap<String, Function> {

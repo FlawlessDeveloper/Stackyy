@@ -5,7 +5,7 @@ pub mod typecheck {
     use crate::util::operation::{Operand, OperationData};
     use crate::util::type_check::{ErrorTypes, TypeCheckError, Types};
 
-    pub fn create_push_type_check() -> Box<dyn Fn(&OperationData, &HashMap<String, Function>, &mut Vec<Types>, bool) -> TypeCheckError> {
+    pub fn create_calling_type_check() -> Box<dyn Fn(&OperationData, &HashMap<String, Function>, &mut Vec<Types>, bool) -> TypeCheckError> {
         Box::new(|data, fns, stack, compile_time| {
             let (success, inp, outp): (TypeCheckError, Vec<Types>, Vec<Types>) = if let Some(inner) = data.operand.clone() {
                 match inner {

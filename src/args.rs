@@ -15,7 +15,7 @@ pub struct Args {
 
     #[clap(short, long)]
     /// If compiling the output file
-    pub out_file: Option<String>
+    pub out_file: Option<String>,
 }
 
 #[derive(CArgs, Debug, Clone)]

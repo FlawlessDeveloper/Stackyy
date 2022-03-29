@@ -2,18 +2,18 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{compiler_error_str, Position, VM};
 use crate::args::Compile;
 use crate::parser::Function;
 use crate::util::compiler_warning_str;
 use crate::util::internals::Internal;
-use crate::util::operations::DescriptorAction;
+use crate::util::operations::{CALLING_RUNTIME, CALLING_TYPECHECK, DESCRIPTOR_RUNTIME, DESCRIPTOR_TYPECHECK, DescriptorAction, INTERNAL_RUNTIME, INTERNAL_TYPECHECK, SIMPLE_RUNTIME, SIMPLE_TYPECHECK};
 use crate::util::token::Token;
 use crate::util::type_check::{TypeCheckError, Types};
 
-pub type JumpOffset = u32;
-
-#[derive(Ord, PartialOrd, Eq, PartialEq, Clone, Debug)]
+#[derive(Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Clone, Debug)]
 pub enum OperationType {
     Push,
     PushFunction,
@@ -25,26 +25,25 @@ pub enum OperationType {
     CallIf,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Operand {
     Int(i32),
     Str(String),
     Bool(bool),
     Internal(Internal),
-    Jump(JumpOffset),
     PushFunction(String, Vec<Types>, Vec<Types>),
     Call(String),
     DescriptorAction(String, String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum OperationDataInfo {
     Token(Token),
     Position(Position),
     None,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct OperationData {
     pub(crate) typ: OperationType,
     pub(crate) data: OperationDataInfo,
@@ -82,8 +81,8 @@ impl Operation {
     }
 
 
-    pub fn new(data: OperationData, execute_fn: Box<dyn Fn(&OperationData, &mut VM)>, type_check: Box<dyn Fn(&OperationData, &HashMap<String, Function>, &mut Vec<Types>, bool) -> TypeCheckError>) -> Self {
-        Operation { data, execute_fn: Arc::new(execute_fn), type_check: Arc::new(type_check) }
+    pub fn new(data: OperationData, execute_fn: Arc<Box<dyn Fn(&OperationData, &mut VM)>>, type_check: Arc<Box<dyn Fn(&OperationData, &HashMap<String, Function>, &mut Vec<Types>, bool) -> TypeCheckError>>) -> Self {
+        Operation { data, execute_fn, type_check }
     }
 }
 
@@ -129,5 +128,34 @@ impl Display for OperationDataInfo {
             }
         }
         Ok(())
+    }
+}
+
+impl From<OperationData> for Operation {
+    fn from(data: OperationData) -> Self {
+        let typ = data.clone().typ;
+        match typ {
+            OperationType::Push => {
+                Operation::new(data, SIMPLE_RUNTIME.clone(), SIMPLE_TYPECHECK.clone())
+            }
+            OperationType::PushFunction => {
+                Operation::new(data, CALLING_RUNTIME.clone(), CALLING_TYPECHECK.clone())
+            }
+            OperationType::Internal => {
+                Operation::new(data, INTERNAL_RUNTIME.clone(), INTERNAL_TYPECHECK.clone())
+            }
+            OperationType::Descriptor => {
+                Operation::new(data, DESCRIPTOR_RUNTIME.clone(), DESCRIPTOR_TYPECHECK.clone())
+            }
+            OperationType::Call => {
+                Operation::new(data, CALLING_RUNTIME.clone(), CALLING_TYPECHECK.clone())
+            }
+            OperationType::CallIf => {
+                Operation::new(data, CALLING_RUNTIME.clone(), CALLING_TYPECHECK.clone())
+            }
+            _ => {
+                unreachable!()
+            }
+        }
     }
 }

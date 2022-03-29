@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::lazy::SyncLazy;
 
+use serde::{Deserialize, Serialize};
+
 use crate::util::{compiler_error, compiler_error_str, compiler_warning};
 use crate::util::operation::OperationDataInfo;
 use crate::util::position::Position;
@@ -16,7 +18,7 @@ static KEY_WORD_MAP: SyncLazy<HashMap<String, Keyword>> = SyncLazy::new(|| {
     map
 });
 
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum TokenType {
     Word,
     Int,
@@ -26,7 +28,7 @@ pub enum TokenType {
     FunctionPtr,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum TokenValue {
     Int(i32),
     String(String),
@@ -35,7 +37,7 @@ pub enum TokenValue {
 }
 
 
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Keyword {
     INCLUDE,
     End,
@@ -44,7 +46,7 @@ pub enum Keyword {
 }
 
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Token {
     typ: TokenType,
     text: String,

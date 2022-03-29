@@ -4,6 +4,8 @@ use std::lazy::SyncLazy;
 use std::rc::Rc;
 use std::sync::Mutex;
 
+use serde::{Deserialize, Serialize};
+
 use crate::util::{compiler_error, compiler_error_str};
 use crate::util::operation::OperationDataInfo;
 use crate::util::operations::Descriptor as TDescriptor;
@@ -22,7 +24,7 @@ static TYPES_MAP: SyncLazy<HashMap<String, Types>> = SyncLazy::new(|| {
     map
 });
 
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Types {
     Any,
     Int,

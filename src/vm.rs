@@ -30,6 +30,12 @@ pub struct VM {
 impl From<State> for VM {
     fn from(state: State) -> Self {
         let mut ops = state.get_ops().clone();
+        VM::new(ops)
+    }
+}
+
+impl VM {
+    pub fn new(ops: HashMap<String, Function>) -> Self {
         Self {
             ip: 0,
             ops,
@@ -47,9 +53,7 @@ impl From<State> for VM {
             reg_h: RegisterType::Empty,
         }
     }
-}
 
-impl VM {
     pub fn run(&mut self) {
         let empty = OperationDataInfo::None;
 

@@ -11,6 +11,9 @@ description = "The Stackyy-Lang VM/Compiler/Interpreter"
 clap = { version = "*", features = ["derive"] }
 backtrace = "*"
 rayon = "*"
+serde = { version = "*", features = ["derive"] }
+serde_yaml = "*"
+bincode = "*"
 
 [profile.release-opt]
 inherits = "release"
