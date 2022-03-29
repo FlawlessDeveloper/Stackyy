@@ -1,7 +1,9 @@
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 
-#[derive(Default, Clone, Debug)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Default, Clone, Debug)]
 pub struct Position {
     pub(crate) token_pos_line: u32,
     pub(crate) token_pos_x: u32,

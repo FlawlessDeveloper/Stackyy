@@ -7,9 +7,9 @@ pub mod typecheck {
 
     pub fn create_push_type_check() -> Box<dyn Fn(&OperationData, &HashMap<String, Function>, &mut Vec<Types>, bool) -> TypeCheckError> {
         Box::new(|data, _, stack, _| {
-            if let OperationType::Push = data.0 {
-                if data.2.is_some() {
-                    let value = data.clone().2.unwrap();
+            if let OperationType::Push = data.typ {
+                if data.operand.is_some() {
+                    let value = data.clone().operand.unwrap();
                     let opt = match value {
                         Operand::Int(_) => {
                             Some(Types::Int)
@@ -50,10 +50,10 @@ pub mod runtime {
 
     pub fn create_push() -> Box<dyn Fn(&OperationData, &mut VM)> {
         Box::new(|data, vm| {
-            let location = data.1.location().clone();
-            if let OperationType::Push = data.0 {
-                if data.2.is_some() {
-                    let value = data.clone().2.unwrap();
+            let info = &data.data;
+            if let OperationType::Push = data.typ {
+                if data.operand.is_some() {
+                    let value = data.clone().operand.unwrap();
                     let opt = match value {
                         Operand::Int(val) => {
                             Some(RegisterType::Int(val))
@@ -75,10 +75,10 @@ pub mod runtime {
                         vm.stack_mut().push(opt.unwrap())
                     }
                 } else {
-                    compiler_error_str("Could not create closure for operation", location.clone());
+                    compiler_error_str("Could not create closure for operation", info);
                 }
             } else {
-                compiler_error_str("Could not create closure for operation", location.clone());
+                compiler_error_str("Could not create closure for operation", info);
             }
         })
     }

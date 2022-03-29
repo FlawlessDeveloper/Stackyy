@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 use std::lazy::SyncLazy;
 
+use serde::{Deserialize, Serialize};
+
 use crate::util::{compiler_error, compiler_error_str, compiler_warning};
+use crate::util::operation::OperationDataInfo;
 use crate::util::position::Position;
 use crate::util::token::Keyword::{Call, CallIf, End, INCLUDE};
 use crate::util::type_check::Types;
@@ -15,7 +18,7 @@ static KEY_WORD_MAP: SyncLazy<HashMap<String, Keyword>> = SyncLazy::new(|| {
     map
 });
 
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum TokenType {
     Word,
     Int,
@@ -25,7 +28,7 @@ pub enum TokenType {
     FunctionPtr,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum TokenValue {
     Int(i32),
     String(String),
@@ -34,7 +37,7 @@ pub enum TokenValue {
 }
 
 
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Keyword {
     INCLUDE,
     End,
@@ -43,7 +46,7 @@ pub enum Keyword {
 }
 
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Token {
     typ: TokenType,
     text: String,
@@ -68,6 +71,8 @@ impl Token {
 
 impl From<(Position, String)> for Token {
     fn from(str: (Position, String)) -> Self {
+        let op_data_info = OperationDataInfo::Position(str.clone().0);
+
         if KEY_WORD_MAP.contains_key(&str.1) {
             Self {
                 typ: TokenType::Keyword,
@@ -89,7 +94,7 @@ impl From<(Position, String)> for Token {
             token.remove(token.len() - 1);
 
             if token.matches("(").count() != 1 {
-                compiler_error(format!("Invalid function{typ} declaration. Function{typ} name cant contain '('. Got function decleration: {}", str.clone().1, typ = typ, ), str.clone().0);
+                compiler_error(format!("Invalid function{typ} declaration. Function{typ} name cant contain '('. Got function decleration: {}", str.clone().1, typ = typ, ), &op_data_info);
             }
 
             let parts = token.split_once("(").unwrap();
@@ -102,7 +107,7 @@ impl From<(Position, String)> for Token {
                 let parts = parts.1.split("->").collect::<Vec<&str>>();
 
                 if parts.len() != 2 {
-                    compiler_error(format!("Function{typ} {} can only have input & output", name.clone(), typ = typ), str.clone().0);
+                    compiler_error(format!("Function{typ} {} can only have input & output", name.clone(), typ = typ), &op_data_info);
                 }
 
                 let input = parts.get(0).unwrap().to_string();
@@ -154,7 +159,7 @@ impl From<(Position, String)> for Token {
                                 acc.push('\t');
                             }
                             _ => {
-                                compiler_warning(format!("Invalid escape sequence \\{}", char), str.clone().0);
+                                compiler_warning(format!("Invalid escape sequence \\{}", char), &op_data_info);
                                 acc.push(char);
                             }
                         }

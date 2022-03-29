@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 use std::lazy::SyncLazy;
 
+use serde::{Deserialize, Serialize};
+
 use crate::util::{compiler_error, compiler_error_str};
+use crate::util::operation::OperationDataInfo;
 use crate::util::position::Position;
 use crate::util::token::TokenValue;
 use crate::util::type_check::{ErrorTypes, TypeCheckError, Types};
@@ -78,7 +81,7 @@ static INCLUDE_MAP: SyncLazy<HashMap<&'static str, &'static HashMap<&'static str
 });
 
 
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Copy, Hash)]
+#[derive(Serialize, Deserialize, Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Copy, Hash)]
 pub enum Internal {
     NoOp,
     Print,
@@ -111,13 +114,13 @@ pub enum Internal {
     ReflectionClear,
 }
 
-pub fn to_internal(includes: Vec<String>, str: &TokenValue, pos: Position) -> Internal {
+pub fn to_internal(includes: Vec<String>, str: &TokenValue, pos: &OperationDataInfo) -> Internal {
     if let TokenValue::String(str) = str {
         let ops = includes.iter().fold(INTERNALS_MAP.clone(), |mut acc, include| {
             if let Some(include) = INCLUDE_MAP.get(include.as_str()) {
                 acc.extend(include.clone())
             } else {
-                compiler_error(format!("The system lib: {} was not found", include), pos.clone());
+                compiler_error(format!("The system lib: {} was not found", include), pos);
                 unreachable!();
             }
             acc

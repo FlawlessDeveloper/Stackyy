@@ -4,7 +4,10 @@ use std::lazy::SyncLazy;
 use std::rc::Rc;
 use std::sync::Mutex;
 
+use serde::{Deserialize, Serialize};
+
 use crate::util::{compiler_error, compiler_error_str};
+use crate::util::operation::OperationDataInfo;
 use crate::util::operations::Descriptor as TDescriptor;
 use crate::util::position::Position;
 
@@ -21,7 +24,7 @@ static TYPES_MAP: SyncLazy<HashMap<String, Types>> = SyncLazy::new(|| {
     map
 });
 
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Types {
     Any,
     Int,
@@ -200,7 +203,7 @@ impl From<(Position, String)> for Types {
         if TYPES_MAP.contains_key(&token.1) {
             TYPES_MAP.get(&token.1).unwrap().clone()
         } else {
-            compiler_error(format!("Invalid type: {}", token.1), token.0);
+            compiler_error(format!("Invalid type: {}", token.1), &OperationDataInfo::Position(token.clone().0));
             unreachable!()
         }
     }
