@@ -117,14 +117,14 @@ impl Display for OperationDataInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             OperationDataInfo::Token(token) => {
-                write!(f, "{}", token.location())?;
+                write!(f, "at {}", token.location())?;
                 write!(f, "-> '{}'", token.text())?;
             }
             OperationDataInfo::Position(pos) => {
-                write!(f, "{}", pos)?;
+                write!(f, "at {}", pos)?;
             }
             OperationDataInfo::None => {
-                write!(f, "No debug info")?;
+                write!(f, "")?;
             }
         }
         Ok(())

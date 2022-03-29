@@ -11,7 +11,7 @@ pub mod operations;
 pub mod compile;
 
 pub fn compiler_error(msg: String, pos: &OperationDataInfo) -> ! {
-    panic!("ERROR at {} -> {}", pos, msg);
+    panic!("ERROR {} -> {}", pos, msg);
 }
 
 pub fn compiler_error_str(msg: &str, pos: &OperationDataInfo) -> ! {
@@ -19,7 +19,7 @@ pub fn compiler_error_str(msg: &str, pos: &OperationDataInfo) -> ! {
 }
 
 pub fn compiler_warning(msg: String, pos: &OperationDataInfo) {
-    eprintln!("WARNING at {} -> {}", pos, msg);
+    eprintln!("WARNING {} -> {}", pos, msg);
 }
 
 pub fn compiler_warning_str(msg: &str, pos: &OperationDataInfo) {
@@ -27,7 +27,7 @@ pub fn compiler_warning_str(msg: &str, pos: &OperationDataInfo) {
 }
 
 pub fn runtime_error(msg: String, pos: &OperationDataInfo) -> ! {
-    panic!("RUNTIME ERROR at {} -> {}", pos, msg);
+    panic!("RUNTIME ERROR {} -> {}", pos, msg);
 }
 
 pub fn runtime_error_str(msg: &str, pos: &OperationDataInfo) -> ! {
@@ -35,7 +35,7 @@ pub fn runtime_error_str(msg: &str, pos: &OperationDataInfo) -> ! {
 }
 
 pub fn runtime_warning(msg: String, pos: &OperationDataInfo) {
-    eprintln!("RUNTIME ERROR at {} -> {}", pos, msg);
+    eprintln!("RUNTIME ERROR {} -> {}", pos, msg);
 }
 
 pub fn runtime_warning_str(msg: &str, pos: &OperationDataInfo) {
