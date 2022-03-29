@@ -12,7 +12,7 @@ Stackyy is a stack based, virtual machine language inspired by
 1. Download the repo
 2. Run ``cargo run -- --help`` for a list of all commands
 
-## Building for release.
+## Building for release:
 
 To use the standard optimizations run ``cargo build --release``.  
 If the binary size is unsatifying run ``cargo build --profile=release-opt``
