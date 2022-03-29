@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{OperationDataInfo, VM};
+use crate::args::Compile;
 use crate::parser::{Function, FunctionData};
 use crate::util::operation::{Operation, OperationData};
 
@@ -14,9 +15,9 @@ pub struct CompiledFunction {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ProgramMetadata {
-    author: String,
-    name: String,
-    version: String,
+    pub(crate) name: String,
+    pub(crate) version: String,
+    pub(crate) author: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

@@ -112,9 +112,11 @@ impl State {
 
         let comp = comp.map_or_else(|| {
             Compile {
-                author: "None".to_string(),
-                description: None,
+                meta_path: "".to_string(),
                 strip_data: 0,
+                readable: false,
+                file: "".to_string(),
+                out_file: "".to_string(),
             }
         }, |comp| comp);
 
