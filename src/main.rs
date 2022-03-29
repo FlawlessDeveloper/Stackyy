@@ -15,6 +15,7 @@ use clap::Parser;
 use crate::args::{Action, Args};
 use crate::parser::{pre_parse, tokenize};
 use crate::util::{compiler_error, compiler_error_str};
+use crate::util::operation::OperationDataInfo;
 use crate::util::position::Position;
 use crate::vm::VM;
 
@@ -41,7 +42,7 @@ fn main() {
     let args: Args = Args::parse();
 
     match args.action {
-        Action::Simulate | Action::Compile => {
+        Action::Simulate => {
             let file_text = {
                 let file_name = args.file.clone();
                 let file = OpenOptions::new().read(true).open(&file_name).map_err(|err| format!("Could not open file {} to read from: {}", file_name, err));
@@ -68,7 +69,7 @@ fn main() {
             let path = file_path.clone().parent().unwrap().to_path_buf();
 
             let pre_parsed = pre_parse(file_text, file_path, path.clone());
-            let parsed = tokenize(pre_parsed, 0, path);
+            let parsed = tokenize(pre_parsed, 0, path, None);
 
             let checked = parsed.type_check();
 
@@ -76,9 +77,10 @@ fn main() {
                 checked.unwrap().run();
             } else {
                 let error = checked.err().unwrap();
-                compiler_error(format!("Type check failed:\r\n\t{}", error), Position::default())
+                compiler_error(format!("Type check failed:\r\n\t{}", error), &OperationDataInfo::None);
             }
         }
+        Action::Compile(compiler_options) => {}
         Action::Interpret | Action::Info => {
             let _file_bytes = {
                 let file_name = args.file;

@@ -5,6 +5,7 @@ use std::rc::Rc;
 use std::sync::Mutex;
 
 use crate::util::{compiler_error, compiler_error_str};
+use crate::util::operation::OperationDataInfo;
 use crate::util::operations::Descriptor as TDescriptor;
 use crate::util::position::Position;
 
@@ -200,7 +201,7 @@ impl From<(Position, String)> for Types {
         if TYPES_MAP.contains_key(&token.1) {
             TYPES_MAP.get(&token.1).unwrap().clone()
         } else {
-            compiler_error(format!("Invalid type: {}", token.1), token.0);
+            compiler_error(format!("Invalid type: {}", token.1), &OperationDataInfo::Position(token.clone().0));
             unreachable!()
         }
     }

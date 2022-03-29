@@ -7,7 +7,7 @@ pub mod typecheck {
 
     pub fn create_push_type_check() -> Box<dyn Fn(&OperationData, &HashMap<String, Function>, &mut Vec<Types>, bool) -> TypeCheckError> {
         Box::new(|data, fns, stack, compile_time| {
-            let (success, inp, outp): (TypeCheckError, Vec<Types>, Vec<Types>) = if let Some(inner) = data.2.clone() {
+            let (success, inp, outp): (TypeCheckError, Vec<Types>, Vec<Types>) = if let Some(inner) = data.operand.clone() {
                 match inner {
                     Operand::Call(ref name) | Operand::PushFunction(ref name, _, _) => {
                         if fns.contains_key(name) {
@@ -96,7 +96,7 @@ pub mod runtime {
 
     pub fn create_fn() -> Box<dyn Fn(&OperationData, &mut VM)> {
         Box::new(|data, vm| {
-            let position = data.1.location();
+            let info = &data.data;
 
             #[derive(Ord, PartialOrd, Eq, PartialEq)]
             enum CallEnum {
@@ -106,7 +106,7 @@ pub mod runtime {
             }
 
             let top = {
-                if let Some(operand) = data.clone().2 {
+                if let Some(operand) = data.clone().operand {
                     if let Operand::Call(fnc) = operand {
                         let (inp, outp) = vm.ops().get(&fnc).unwrap().get_contract();
                         CallEnum::SomeInline(fnc, inp, outp)
@@ -140,19 +140,19 @@ pub mod runtime {
                 };
 
                 if !vm.ops().contains_key(&fnc) {
-                    runtime_error(format!("Function: {} does not exist", fnc), position.clone());
+                    runtime_error(format!("Function: {} does not exist", fnc), info);
                 }
 
                 let fnc = vm.ops().get(&fnc).unwrap().clone();
                 if (inp, outp) == fnc.get_contract() {
                     vm.execute_fn(&fnc);
                 } else {
-                    runtime_error_str("Typecheck for dynamic function call failed", position.clone());
+                    runtime_error_str("Typecheck for dynamic function call failed", info);
                 }
             } else {
                 runtime_error_str(
                     "Invalid function call",
-                    position.clone(),
+                    info,
                 );
             }
         })

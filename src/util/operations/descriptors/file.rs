@@ -4,6 +4,7 @@ use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 use std::path::Path;
 
 use crate::Position;
+use crate::util::operation::OperationDataInfo;
 use crate::util::operations::descriptors::{Descriptor, DescriptorAction};
 use crate::util::register_type::RegisterType;
 use crate::util::runtime_error_str;
@@ -23,7 +24,7 @@ impl File {
 }
 
 impl Descriptor for File {
-    fn action(&mut self, action: DescriptorAction, data: &mut Vec<RegisterType>) {
+    fn action(&mut self, action: DescriptorAction, data: &mut Vec<RegisterType>, info: &OperationDataInfo) {
         match action {
             DescriptorAction::Open => {
                 let path = data.pop().unwrap();
@@ -56,7 +57,7 @@ impl Descriptor for File {
                 let str = data.pop().unwrap();
                 if let RegisterType::String(str) = str.clone() {
                     self.file.as_mut().map_or_else(|| {
-                        runtime_error_str("File write failed", Position::default())
+                        runtime_error_str("File write failed", info)
                     }, |f| {
                         f.write_all(str.as_bytes()).unwrap();
                     });
@@ -65,7 +66,7 @@ impl Descriptor for File {
         }
     }
 
-    fn typecheck(&self, action: DescriptorAction, stack: &mut Vec<Types>) -> TypeCheckError {
+    fn typecheck(&self, action: DescriptorAction, stack: &mut Vec<Types>, info: &OperationDataInfo) -> TypeCheckError {
         match action {
             DescriptorAction::Open => {
                 if stack.len() == 0 {

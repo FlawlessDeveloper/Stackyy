@@ -1,8 +1,11 @@
 use crate::{compiler_error, Position};
+use crate::util::operation::OperationDataInfo;
 
 pub fn resolve_opt(str: &str) -> String {
+    let empty = OperationDataInfo::None;
+
     if !str.starts_with("opt/") {
-        compiler_error(format!("Invalid include path: {}", str), Position::default());
+        compiler_error(format!("Invalid include path: {}", str), &empty);
         unreachable!()
     }
 
@@ -14,7 +17,7 @@ pub fn resolve_opt(str: &str) -> String {
         "logging" => include_str!("logging.scy"),
         "files" => include_str!("files.scy"),
         _ => {
-            compiler_error(format!("Invalid optional include path: {}", str), Position::default());
+            compiler_error(format!("Invalid optional include path: {}", str), &empty);
             unreachable!()
         }
     };

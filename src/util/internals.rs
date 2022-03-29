@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::lazy::SyncLazy;
 
 use crate::util::{compiler_error, compiler_error_str};
+use crate::util::operation::OperationDataInfo;
 use crate::util::position::Position;
 use crate::util::token::TokenValue;
 use crate::util::type_check::{ErrorTypes, TypeCheckError, Types};
@@ -111,13 +112,13 @@ pub enum Internal {
     ReflectionClear,
 }
 
-pub fn to_internal(includes: Vec<String>, str: &TokenValue, pos: Position) -> Internal {
+pub fn to_internal(includes: Vec<String>, str: &TokenValue, pos: &OperationDataInfo) -> Internal {
     if let TokenValue::String(str) = str {
         let ops = includes.iter().fold(INTERNALS_MAP.clone(), |mut acc, include| {
             if let Some(include) = INCLUDE_MAP.get(include.as_str()) {
                 acc.extend(include.clone())
             } else {
-                compiler_error(format!("The system lib: {} was not found", include), pos.clone());
+                compiler_error(format!("The system lib: {} was not found", include), pos);
                 unreachable!();
             }
             acc

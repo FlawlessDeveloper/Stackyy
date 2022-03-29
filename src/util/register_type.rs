@@ -2,6 +2,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use crate::Position;
+use crate::util::operation::OperationDataInfo;
 use crate::util::operations::{Descriptor, DescriptorAction};
 use crate::util::runtime_error_str;
 use crate::util::type_check::Types;
@@ -19,7 +20,7 @@ pub enum RegisterType {
 
 
 impl RegisterType {
-    pub fn to_string(&self) -> Option<String> {
+    pub fn to_string(&self, info: &OperationDataInfo) -> Option<String> {
         match self {
             RegisterType::Int(int) => {
                 Some(int.to_string())
@@ -40,9 +41,9 @@ impl RegisterType {
                 let mut locked = descr.lock();
                 let locked = locked.as_mut().unwrap();
                 let mut tmp_stack = vec![];
-                locked.action(DescriptorAction::ToString, &mut tmp_stack);
+                locked.action(DescriptorAction::ToString, &mut tmp_stack, &info);
                 let str = tmp_stack.get(0).unwrap();
-                str.to_string()
+                str.to_string(&info)
             }
             RegisterType::Empty => {
                 None
@@ -50,12 +51,12 @@ impl RegisterType {
         }
     }
 
-    pub fn to_string_stacked(&self, position: Position, stack: &mut Vec<RegisterType>) {
-        let str = self.to_string();
+    pub fn to_string_stacked(&self, info: &OperationDataInfo, stack: &mut Vec<RegisterType>) {
+        let str = self.to_string(&info);
         if let Some(str) = str {
             stack.push(RegisterType::String(str));
         } else {
-            runtime_error_str("Trying to convert empty to string", position);
+            runtime_error_str("Trying to convert empty to string", info);
         }
     }
 }

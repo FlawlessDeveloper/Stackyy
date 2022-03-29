@@ -225,15 +225,15 @@ pub mod runtime {
 
     use crate::{Position, VM};
     use crate::util::internals::Internal;
-    use crate::util::operation::OperationData;
+    use crate::util::operation::{OperationData, OperationDataInfo};
     use crate::util::operations::DescriptorAction;
     use crate::util::register_type::RegisterType;
     use crate::util::runtime_error_str;
 
-    fn noop(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {}
+    fn noop(internal: Internal, stack: &mut Vec<RegisterType>, info: &OperationDataInfo) {}
 
-    fn print(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {
-        to_string(internal, stack, position);
+    fn print(internal: Internal, stack: &mut Vec<RegisterType>, info: &OperationDataInfo) {
+        to_string(internal, stack, info);
         if let RegisterType::String(str) = stack.pop().unwrap() {
             if internal == Internal::PrintLn {
                 println!("{str}");
@@ -244,27 +244,27 @@ pub mod runtime {
         }
     }
 
-    fn to_string(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {
+    fn to_string(internal: Internal, stack: &mut Vec<RegisterType>, info: &OperationDataInfo) {
         let reg = stack.pop().unwrap();
-        reg.to_string_stacked(position, stack);
+        reg.to_string_stacked(info, stack);
     }
 
-    fn swap(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {
+    fn swap(internal: Internal, stack: &mut Vec<RegisterType>, info: &OperationDataInfo) {
         let a = stack.pop().unwrap();
         let b = stack.pop().unwrap();
         stack.push(a);
         stack.push(b);
     }
 
-    fn drop(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {
+    fn drop(internal: Internal, stack: &mut Vec<RegisterType>, info: &OperationDataInfo) {
         if let RegisterType::Descriptor(descr) = stack.pop().unwrap() {
             let mut locked = descr.lock();
             let locked = locked.as_mut().unwrap();
-            locked.action(DescriptorAction::Close, stack);
+            locked.action(DescriptorAction::Close, stack, &info);
         }
     }
 
-    fn dup(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {
+    fn dup(internal: Internal, stack: &mut Vec<RegisterType>, info: &OperationDataInfo) {
         let top = stack.pop().unwrap();
         stack.push(top.clone());
         stack.push(top);
@@ -274,19 +274,19 @@ pub mod runtime {
         stack.reverse();
     }
 
-    fn drop_stack(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {
+    fn drop_stack(internal: Internal, stack: &mut Vec<RegisterType>, info: &OperationDataInfo) {
         stack.clear();
         stack.shrink_to_fit();
     }
 
-    fn dup_stack(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {
+    fn dup_stack(internal: Internal, stack: &mut Vec<RegisterType>, info: &OperationDataInfo) {
         let to_add = stack.clone();
         stack.extend(to_add);
     }
 
-    fn dbg_stack(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {
+    fn dbg_stack(internal: Internal, stack: &mut Vec<RegisterType>, info: &OperationDataInfo) {
         for (index, item) in stack.iter().enumerate() {
-            let str = if let Some(str) = item.to_string() {
+            let str = if let Some(str) = item.to_string(info) {
                 str
             } else {
                 "No representation".to_string()
@@ -295,7 +295,7 @@ pub mod runtime {
         }
     }
 
-    fn math(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {
+    fn math(internal: Internal, stack: &mut Vec<RegisterType>, info: &OperationDataInfo) {
         let top = stack.pop().unwrap();
         if let RegisterType::Int(top) = top {
             match internal {
@@ -305,7 +305,7 @@ pub mod runtime {
                     if let RegisterType::Int(bottom) = bottom {
                         stack.push(RegisterType::Int(top + bottom))
                     } else {
-                        runtime_error_str("Usage of invalid types", position.clone());
+                        runtime_error_str("Usage of invalid types", info);
                     }
                 }
                 Internal::Minus => {
@@ -314,7 +314,7 @@ pub mod runtime {
                     if let RegisterType::Int(bottom) = bottom {
                         stack.push(RegisterType::Int(top - bottom))
                     } else {
-                        runtime_error_str("Usage of invalid types", position.clone());
+                        runtime_error_str("Usage of invalid types", info);
                     }
                 }
                 Internal::Mult => {
@@ -323,7 +323,7 @@ pub mod runtime {
                     if let RegisterType::Int(bottom) = bottom {
                         stack.push(RegisterType::Int(top * bottom))
                     } else {
-                        runtime_error_str("Usage of invalid types", position.clone());
+                        runtime_error_str("Usage of invalid types", info);
                     }
                 }
                 Internal::Div => {
@@ -331,11 +331,11 @@ pub mod runtime {
 
                     if let RegisterType::Int(bottom) = bottom {
                         if bottom == 0 {
-                            runtime_error_str("Divison by 0 is undefined", position.clone());
+                            runtime_error_str("Divison by 0 is undefined", info);
                         }
                         stack.push(RegisterType::Int(top / bottom))
                     } else {
-                        runtime_error_str("Usage of invalid types", position.clone());
+                        runtime_error_str("Usage of invalid types", info);
                     }
                 }
                 Internal::Modulo => {
@@ -344,7 +344,7 @@ pub mod runtime {
                     if let RegisterType::Int(bottom) = bottom {
                         stack.push(RegisterType::Int(top % bottom))
                     } else {
-                        runtime_error_str("Usage of invalid types", position.clone());
+                        runtime_error_str("Usage of invalid types", info);
                     }
                 }
                 Internal::Squared | Internal::Cubed => {
@@ -359,7 +359,7 @@ pub mod runtime {
         }
     }
 
-    fn bool_ops(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {
+    fn bool_ops(internal: Internal, stack: &mut Vec<RegisterType>, info: &OperationDataInfo) {
         match internal {
             Internal::Not | Internal::NotPeek => {
                 let top = stack.pop().unwrap();
@@ -393,7 +393,7 @@ pub mod runtime {
                         false
                     }
                 } else {
-                    runtime_error_str("Comparison of invalid types", position.clone());
+                    runtime_error_str("Comparison of invalid types", info);
                     unreachable!()
                 };
 
@@ -415,11 +415,11 @@ pub mod runtime {
                             }
                         }
                     } else {
-                        runtime_error_str("Comparison of invalid types", position.clone());
+                        runtime_error_str("Comparison of invalid types", info);
                         unreachable!();
                     }
                 } else {
-                    runtime_error_str("Comparison of invalid types", position.clone());
+                    runtime_error_str("Comparison of invalid types", info);
                     unreachable!();
                 };
 
@@ -429,7 +429,7 @@ pub mod runtime {
         }
     }
 
-    fn reflection(internal: Internal, stack: &mut Vec<RegisterType>, position: Position) {
+    fn reflection(internal: Internal, stack: &mut Vec<RegisterType>, info: &OperationDataInfo) {
         let fnc = stack.pop().unwrap();
         if let RegisterType::Function(mut str, inp, outp) = fnc {
             match internal {
@@ -438,11 +438,11 @@ pub mod runtime {
                     let (str, mod_fnc) = {
                         if let RegisterType::Int(val) = amount {
                             if str.len() == 0 {
-                                runtime_error_str("Cannot remove string from empty function name", position.clone());
+                                runtime_error_str("Cannot remove string from empty function name", info);
                                 unreachable!();
                             }
                             if val > str.len() as i32 {
-                                runtime_error_str("Tried to remove too much from function name", position.clone());
+                                runtime_error_str("Tried to remove too much from function name", info);
                                 unreachable!();
                             }
 
@@ -453,7 +453,7 @@ pub mod runtime {
                                 if let Some(char) = char {
                                     str_add.push(char);
                                 } else {
-                                    runtime_error_str("Tried to remove too much from function name", position.clone());
+                                    runtime_error_str("Tried to remove too much from function name", info);
                                     unreachable!();
                                 }
                             }
@@ -461,7 +461,7 @@ pub mod runtime {
 
                             (str_add, RegisterType::Function(str, inp, outp))
                         } else {
-                            runtime_error_str("Comparison of invalid types", position.clone());
+                            runtime_error_str("Comparison of invalid types", info);
                             unreachable!();
                         }
                     };
@@ -478,7 +478,7 @@ pub mod runtime {
                                 str.push_str(&val);
                                 RegisterType::Function(str, inp, outp)
                             } else {
-                                runtime_error_str("Can not push non string to function", position.clone());
+                                runtime_error_str("Can not push non string to function", info);
                                 unreachable!();
                             }
                         } else {
@@ -497,20 +497,20 @@ pub mod runtime {
     pub fn get_internal_executor(internal: Internal) -> Box<dyn Fn(&OperationData, &mut VM)> {
         Box::new(move |op, vm| {
             let internal = internal;
-            let position = op.1.location().clone();
+            let info = &op.data;
             match internal {
-                Internal::NoOp => noop(internal, vm.stack_mut(), position),
-                Internal::Print | Internal::PrintLn => print(internal, vm.stack_mut(), position),
-                Internal::Swap => swap(internal, vm.stack_mut(), position),
-                Internal::Drop => drop(internal, vm.stack_mut(), position),
-                Internal::Dup => dup(internal, vm.stack_mut(), position),
-                Internal::RevStack => dup_stack(internal, vm.stack_mut(), position),
-                Internal::DropStack => drop_stack(internal, vm.stack_mut(), position),
-                Internal::DupStack => dup_stack(internal, vm.stack_mut(), position),
-                Internal::DbgStack => dbg_stack(internal, vm.stack_mut(), position),
-                Internal::Plus | Internal::Minus | Internal::Mult | Internal::Div | Internal::Modulo | Internal::Squared | Internal::Cubed => math(internal, vm.stack_mut(), position),
-                Internal::Not | Internal::NotPeek | Internal::Equals | Internal::Larger | Internal::LargerEq | Internal::Smaller | Internal::SmallerEq => bool_ops(internal, vm.stack_mut(), position),
-                Internal::ReflectionRemoveStr | Internal::ReflectionRemoveStrDrop | Internal::ReflectionPush | Internal::ReflectionClear => reflection(internal, vm.stack_mut(), position),
+                Internal::NoOp => noop(internal, vm.stack_mut(), info),
+                Internal::Print | Internal::PrintLn => print(internal, vm.stack_mut(), info),
+                Internal::Swap => swap(internal, vm.stack_mut(), info),
+                Internal::Drop => drop(internal, vm.stack_mut(), info),
+                Internal::Dup => dup(internal, vm.stack_mut(), info),
+                Internal::RevStack => dup_stack(internal, vm.stack_mut(), info),
+                Internal::DropStack => drop_stack(internal, vm.stack_mut(), info),
+                Internal::DupStack => dup_stack(internal, vm.stack_mut(), info),
+                Internal::DbgStack => dbg_stack(internal, vm.stack_mut(), info),
+                Internal::Plus | Internal::Minus | Internal::Mult | Internal::Div | Internal::Modulo | Internal::Squared | Internal::Cubed => math(internal, vm.stack_mut(), info),
+                Internal::Not | Internal::NotPeek | Internal::Equals | Internal::Larger | Internal::LargerEq | Internal::Smaller | Internal::SmallerEq => bool_ops(internal, vm.stack_mut(), info),
+                Internal::ReflectionRemoveStr | Internal::ReflectionRemoveStrDrop | Internal::ReflectionPush | Internal::ReflectionClear => reflection(internal, vm.stack_mut(), info),
                 _ => {
                     println!("Internal: {:?} not implemented yet", internal)
                 }

@@ -7,10 +7,11 @@ use std::path::{Path, PathBuf};
 use rayon::iter::ParallelIterator;
 use rayon::prelude::{IntoParallelIterator, IntoParallelRefIterator};
 
+use crate::args::Compile;
 use crate::opt::resolve_opt;
 use crate::util::{compiler_error, compiler_error_str, compiler_warning};
 use crate::util::internals::{Internal, to_internal};
-use crate::util::operation::{JumpOffset, Operand, Operation, OperationData, OperationType};
+use crate::util::operation::{JumpOffset, Operand, Operation, OperationData, OperationDataInfo, OperationType};
 use crate::util::operations::{calling_runtime, calling_typecheck, descriptors_runtime, descriptors_typecheck, internals_runtime, internals_typecheck, simple_runtime, simple_typecheck};
 use crate::util::position::Position;
 use crate::util::token::*;
@@ -27,7 +28,7 @@ pub struct FunctionData(String, Vec<Types>, Vec<Types>);
 #[derive(Clone)]
 pub struct Function {
     pub(crate) data: FunctionData,
-    pub(crate) operations: Vec<(Position, Operation)>,
+    pub(crate) operations: Vec<(OperationDataInfo, Operation)>,
 }
 
 impl Function {
@@ -43,9 +44,9 @@ impl Function {
                 if type_check.is_error() {
                     let op = op.clone();
                     let data = op.1.data();
-                    let typ = &data.0;
-                    let operand = &data.2;
-                    let pos = data.1.location().clone();
+                    let typ = &data.typ;
+                    let operand = &data.operand;
+                    let pos = &data.data;
                     compiler_warning(format!("\r\nOperation caused type check failure. \r\nOperation Type: {:?} \r\nOperation Value: {:?}", typ, operand), pos);
                     type_check
                 } else {
@@ -91,7 +92,7 @@ impl State {
         }
     }
 
-    pub fn update(&mut self, tokens: Vec<(Position, Token)>) {
+    pub fn update(&mut self, tokens: Vec<(Position, Token)>, comp: Option<Compile>) {
         self.functions = tokens.clone().iter().fold(HashMap::new(), |mut acc, instr| {
             if instr.1.typ().clone() == TokenType::Function {
                 if let TokenValue::Function(name, inp, outp) = instr.1.value().clone() {
@@ -103,15 +104,23 @@ impl State {
 
         let mut iterator = tokens.iter();
 
+        let comp = comp.map_or_else(|| {
+            Compile {
+                author: "None".to_string(),
+                description: None,
+                strip_data: 0,
+            }
+        }, |comp| comp);
+
 
         while iterator.size() != 0 {
             let token = iterator.next();
 
             if let Some(token) = token {
                 let token = token.clone();
-                let pos = token.clone().0;
                 let token = token.clone().1;
                 let value = token.value();
+                let op_data_info = OperationDataInfo::from_token(token.clone(), &comp);
                 if self.in_fn.is_none() {
                     match token.typ() {
                         TokenType::Keyword => {
@@ -119,13 +128,13 @@ impl State {
                                 match keyword {
                                     Keyword::INCLUDE => {
                                         if self.incl_lvl > MAX_INCL_DEPTH {
-                                            compiler_error_str("Nested includes are not allowed", pos.clone());
+                                            compiler_error_str("Nested includes are not allowed", &op_data_info);
                                         }
 
                                         let path = iterator.next();
 
                                         if let None = path {
-                                            compiler_error_str("No string provided. Empty tokenstream", pos.clone());
+                                            compiler_error_str("No string provided. Empty tokenstream", &op_data_info);
                                         }
 
                                         let path = path.unwrap();
@@ -140,7 +149,7 @@ impl State {
                                                 } else {
                                                     let pathbuf = PathBuf::from(Path::new(&s_path));
                                                     let parsed = pre_parse(resolve_opt(&s_path), pathbuf.clone(), pathbuf.clone());
-                                                    let state = tokenize(parsed, self.incl_lvl, pathbuf);
+                                                    let state = tokenize(parsed, self.incl_lvl, pathbuf, Some(comp.clone()));
 
                                                     self.functions.extend(state.functions);
                                                     self.operations.extend(state.operations);
@@ -151,28 +160,28 @@ impl State {
 
                                                 let file = OpenOptions::new().read(true).open(&incl_path);
                                                 if file.is_err() {
-                                                    compiler_error(format!("The file {:?} could not be found", incl_path), pos.clone());
+                                                    compiler_error(format!("The file {:?} could not be found", incl_path), &op_data_info);
                                                 }
 
                                                 let mut string = String::new();
 
                                                 let mut file = file.unwrap();
                                                 if file.read_to_string(&mut string).is_err() {
-                                                    compiler_error(format!("The file {:?} could not be read from", incl_path), pos.clone());
+                                                    compiler_error(format!("The file {:?} could not be read from", incl_path), &op_data_info);
                                                 }
 
                                                 let parsed = pre_parse(string, incl_path.clone(), incl_path.parent().unwrap().to_path_buf());
-                                                let state = tokenize(parsed, self.incl_lvl, incl_path.parent().unwrap().to_path_buf());
+                                                let state = tokenize(parsed, self.incl_lvl, incl_path.parent().unwrap().to_path_buf(), Some(comp.clone()));
 
                                                 self.operations.extend(state.operations);
                                             }
                                         } else {
-                                            compiler_error(format!("No string passed to include. Found: {:?}", path.1.value()), pos.clone());
+                                            compiler_error(format!("No string passed to include. Found: {:?}", path.1.value()), &op_data_info);
                                             unreachable!()
                                         }
                                     }
                                     _ => {
-                                        compiler_error_str("Only includes and functions are allowed on the top level", pos);
+                                        compiler_error_str("Only includes and functions are allowed on the top level", &op_data_info);
                                     }
                                 }
                             }
@@ -184,11 +193,11 @@ impl State {
                                     operations: vec![],
                                 })
                             } else {
-                                compiler_error_str("Compiler bug! Got function without function data", pos)
+                                compiler_error_str("Compiler bug! Got function without function data", &op_data_info);
                             }
                         }
                         _ => {
-                            compiler_error_str("Only includes and functions are allowed on the top level", pos);
+                            compiler_error_str("Only includes and functions are allowed on the top level", &op_data_info);
                         }
                     }
                 } else {
@@ -205,20 +214,20 @@ impl State {
 
                                 token_tmp.remove(0);
                                 if token_tmp.split_once("-").is_none() {
-                                    compiler_error_str("Invalid ressource operation.", pos.clone());
+                                    compiler_error_str("Invalid ressource operation.", &op_data_info);
                                     unreachable!()
                                 }
 
                                 if let Some((typ, action)) = token_tmp.split_once("-") {
                                     vec![
                                         Operation::new(
-                                            OperationData(OperationType::Descriptor, token, Some(Operand::DescriptorAction(typ.to_owned(), action.to_owned()))),
+                                            OperationData::new(OperationType::Descriptor, token, &comp, Some(Operand::DescriptorAction(typ.to_owned(), action.to_owned()))),
                                             descriptors_runtime(),
                                             descriptors_typecheck(),
                                         )
                                     ]
                                 } else {
-                                    compiler_error_str("Invalid ressource operation.", pos.clone());
+                                    compiler_error_str("Invalid ressource operation.", &op_data_info);
                                     unreachable!()
                                 }
                             } else if text.starts_with("~") && {
@@ -234,19 +243,19 @@ impl State {
 
                                 vec![
                                     Operation::new(
-                                        OperationData(OperationType::PushFunction, token, Some(Operand::PushFunction(func_name, inp.clone(), outp.clone()))),
+                                        OperationData::new(OperationType::PushFunction, token, &comp, Some(Operand::PushFunction(func_name, inp.clone(), outp.clone()))),
                                         simple_runtime::create_push(),
                                         simple_typecheck::create_push_type_check(),
                                     )
                                 ]
                             } else if self.functions.contains_key(&text) {
-                                vec![Operation::new(OperationData(OperationType::Call, token, Some(Operand::Call(text))),
+                                vec![Operation::new(OperationData::new(OperationType::Call, token, &comp, Some(Operand::Call(text))),
                                                     calling_runtime::create_fn(),
                                                     calling_typecheck::create_push_type_check(), )]
                             } else {
-                                let internal = to_internal(sys_libs, value, pos.clone());
+                                let internal = to_internal(sys_libs, value, &op_data_info);
                                 vec![Operation::new(
-                                    OperationData(OperationType::Internal, token, Some(Operand::Internal(internal))),
+                                    OperationData::new(OperationType::Internal, token, &comp, Some(Operand::Internal(internal))),
                                     internals_runtime::get_internal_executor(internal),
                                     internals_typecheck::get_internal_typecheck(internal),
                                 )]
@@ -259,21 +268,21 @@ impl State {
                                 Operand::Int(*if let TokenValue::Int(val) = value {
                                     val
                                 } else {
-                                    compiler_error_str("Internal parser error occurred", pos);
+                                    compiler_error_str("Internal parser error occurred", &op_data_info);
                                     unreachable!();
                                 })
                             } else {
                                 Operand::Str(if let TokenValue::String(str) = value {
                                     str.clone()
                                 } else {
-                                    compiler_error_str("Internal parser error occurred", pos);
+                                    compiler_error_str("Internal parser error occurred", &op_data_info);
                                     unreachable!();
                                 })
                             };
 
                             vec![
                                 Operation::new(
-                                    OperationData(OperationType::Push, token, Some(operand)),
+                                    OperationData::new(OperationType::Push, token, &comp, Some(operand)),
                                     simple_runtime::create_push(),
                                     simple_typecheck::create_push_type_check(),
                                 )
@@ -285,15 +294,15 @@ impl State {
                             if let TokenValue::Keyword(keyword) = value {
                                 match keyword {
                                     Keyword::INCLUDE => {
-                                        compiler_error_str("Include is only allowed on the top level", pos.clone());
+                                        compiler_error_str("Include is only allowed on the top level", &op_data_info);
                                     }
                                     Keyword::Call | Keyword::CallIf => {
-                                        ops.push(Operation::new(OperationData(
+                                        ops.push(Operation::new(OperationData::new(
                                             if keyword.clone() == Keyword::Call {
                                                 OperationType::Call
                                             } else {
                                                 OperationType::CallIf
-                                            }, token, None),
+                                            }, token, &comp, None),
                                                                 calling_runtime::create_fn(),
                                                                 calling_typecheck::create_push_type_check(),
                                         ))
@@ -309,41 +318,41 @@ impl State {
                             ops
                         }
                         TokenType::Function => {
-                            compiler_error_str("Functions are only allowed on the top level", pos.clone());
+                            compiler_error_str("Functions are only allowed on the top level", &op_data_info);
                             unreachable!()
                         }
                         TokenType::FunctionPtr => {
                             if let TokenValue::Function(name, inp, outp) = token.value().clone() {
                                 vec![Operation::new(
-                                    OperationData(OperationType::Push, token, Some(Operand::PushFunction(name, inp, outp))),
+                                    OperationData::new(OperationType::Push, token, &comp, Some(Operand::PushFunction(name, inp, outp))),
                                     simple_runtime::create_push(),
                                     simple_typecheck::create_push_type_check(),
                                 )]
                             } else {
-                                compiler_error_str("Internal parser error occurred", pos);
+                                compiler_error_str("Internal parser error occurred", &op_data_info);
                                 unreachable!();
                             }
                         }
                     };
 
                     to_add.into_iter().for_each(|to_add| {
-                        let pos = pos.clone();
-                        function.operations.push((pos, to_add));
+                        let pos = &to_add.data().data;
+                        function.operations.push((pos.clone(), to_add));
                     });
 
                     if self.in_fn.is_some() {
                         self.in_fn = Some(function)
                     } else {
-                        compiler_error_str("Compiler bug! Wanted to modify in_fn even though we are not in a function anymore", pos.clone());
+                        compiler_error_str("Compiler bug! Wanted to modify in_fn even though we are not in a function anymore", &op_data_info);
                     }
                 }
             } else {
-                compiler_error_str("Empty token stream", Position::default());
+                compiler_error_str("Empty token stream", &OperationDataInfo::None);
             }
         }
 
         if let Some(ref fnc) = self.in_fn {
-            compiler_error(format!("Unclosed function {}", fnc.data.0), Position::default())
+            compiler_error(format!("Unclosed function {}", fnc.data.0), &OperationDataInfo::None);
         }
 
 
@@ -351,13 +360,13 @@ impl State {
             (entry.clone().0.clone(), Function {
                 data: entry.1.data.clone(),
                 operations: entry.1.operations.iter().map(|op| {
-                    if op.1.data.0 == OperationType::PushFunction {
+                    if op.1.data.typ == OperationType::PushFunction {
                         let mut operation = op.1.clone();
 
-                        if let Operand::Str(func_name) = operation.data.2.clone().unwrap() {
+                        if let Operand::Str(func_name) = operation.data.operand.clone().unwrap() {
                             let FunctionData(name, inp, outp) = self.operations.get(&func_name).unwrap().data.clone();
 
-                            operation.data.2 = Some(Operand::PushFunction(name, inp, outp));
+                            operation.data.operand = Some(Operand::PushFunction(name, inp, outp));
                         }
 
                         (op.0.clone(), operation)
@@ -477,7 +486,7 @@ pub fn pre_parse(string: String, file: PathBuf, path: PathBuf) -> Vec<(Position,
         });
 
     if unclosed {
-        compiler_error_str("Unclosed string sequence", pos);
+        compiler_error_str("Unclosed string sequence", &OperationDataInfo::Position(pos));
     }
 
     let lines = lines.par_iter()
@@ -488,14 +497,14 @@ pub fn pre_parse(string: String, file: PathBuf, path: PathBuf) -> Vec<(Position,
     lines
 }
 
-pub fn tokenize(tokens: Vec<(Position, String)>, included: u8, path: PathBuf) -> State {
+pub fn tokenize(tokens: Vec<(Position, String)>, included: u8, path: PathBuf, comp: Option<Compile>) -> State {
     let mut state = if included != 0 { State::new_with_include(included, path) } else { State::new(path) };
 
     state.update(tokens.par_iter().map(|token| {
         let token = token.clone();
 
         (token.clone().0, Token::from(token))
-    }).collect());
+    }).collect(), comp);
 
     state
 }

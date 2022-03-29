@@ -3,7 +3,7 @@ use std::process::exit;
 
 use crate::parser::{Function, State};
 use crate::util::{compiler_error_str, runtime_error, runtime_error_str, runtime_warning, runtime_warning_str};
-use crate::util::operation::{Operation, OperationData, OperationType};
+use crate::util::operation::{Operation, OperationData, OperationDataInfo, OperationType};
 use crate::util::position::Position;
 use crate::util::register_type::RegisterType;
 use crate::util::type_check::{ErrorTypes, Types};
@@ -15,7 +15,7 @@ pub struct VM {
     ops: HashMap<String, Function>,
     stack: Vec<RegisterType>,
     type_stack: Vec<Types>,
-    last_op: Option<(Position, OperationData)>,
+    last_op: Option<(OperationDataInfo, OperationData)>,
     depth: u8,
     reg_a: RegisterType,
     reg_b: RegisterType,
@@ -51,8 +51,10 @@ impl From<State> for VM {
 
 impl VM {
     pub fn run(&mut self) {
+        let empty = OperationDataInfo::None;
+
         if !self.ops.contains_key("main") {
-            runtime_error_str("Program does not contain a main function", Position::default());
+            runtime_error_str("Program does not contain a main function", &empty);
         }
 
         let start = self.ops.get("main").unwrap().clone();
@@ -60,13 +62,13 @@ impl VM {
         self.execute_fn(&start);
 
         if self.stack.len() != 1 {
-            runtime_error_str("No return code provided", Position::default());
+            runtime_error_str("No return code provided", &empty);
         }
 
         if let RegisterType::Int(exit_code) = self.stack.pop().unwrap() {
             exit(exit_code)
         } else {
-            runtime_error_str("Return code can only be of type integer", Position::default());
+            runtime_error_str("Return code can only be of type integer", &empty);
         }
     }
 
@@ -86,21 +88,21 @@ impl VM {
         &mut self.stack
     }
 
-    fn execute_op(&mut self, op: &(Position, Operation), fn_name: String) {
-        let position = op.0.clone();
+    fn execute_op(&mut self, op: &(OperationDataInfo, Operation), fn_name: String) {
+        let info = &op.0;
         let data = op.1.data();
         let typecheck = &op.1.type_check;
         let exec = &op.1.execute_fn;
         if self.depth > MAX_CALL_STACK_SIZE {
-            runtime_error_str("Stack overflow", position.clone());
+            runtime_error_str("Stack overflow", info);
         }
 
 
         if self.type_stack.len() != self.stack.len() {
             if cfg!(debug_assertions) {
-                runtime_error(format!("Typecheck desync happened.\r\nResponsible operation: {:#?}\r\nStack {:?}\r\nTypestack {:?}", self.last_op.clone().unwrap(), self.stack, self.type_stack), position.clone());
+                runtime_error(format!("Typecheck desync happened.\r\nResponsible operation: {:#?}\r\nStack {:?}\r\nTypestack {:?}", self.last_op.clone().unwrap(), self.stack, self.type_stack), info);
             } else {
-                runtime_error(format!("Typecheck desync happened. Please create a issue on github"), position.clone());
+                runtime_error(format!("Typecheck desync happened. Please create a issue on github"), info);
             }
         }
 
@@ -109,10 +111,10 @@ impl VM {
         if !tc_error {
             exec(data, self);
         } else {
-            runtime_error(format!("Function {} failed type check ", fn_name), position.clone());
+            runtime_error(format!("Function {} failed type check ", fn_name), info);
         };
 
-        self.last_op = Some((position, data.clone()))
+        self.last_op = Some((info.clone(), data.clone()))
     }
 
     pub fn ops(&self) -> &HashMap<String, Function> {

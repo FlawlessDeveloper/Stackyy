@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use crate::{compiler_error, compiler_error_str, Position, VM};
 use crate::parser::Function;
 use crate::util::{runtime_error, runtime_error_str, runtime_warning_str};
-use crate::util::operation::{Operand, OperationData, OperationType};
+use crate::util::operation::{Operand, OperationData, OperationDataInfo, OperationType};
 use crate::util::operations::descriptors::file::File;
 use crate::util::register_type::RegisterType;
 use crate::util::type_check::{ErrorTypes, TypeCheckError, Types};
@@ -45,27 +45,27 @@ pub enum DescriptorType {
 }
 
 pub trait Descriptor: Debug {
-    fn action(&mut self, action: DescriptorAction, data: &mut Vec<RegisterType>);
-    fn typecheck(&self, action: DescriptorAction, stack: &mut Vec<Types>) -> TypeCheckError;
+    fn action(&mut self, action: DescriptorAction, data: &mut Vec<RegisterType>, info: &OperationDataInfo);
+    fn typecheck(&self, action: DescriptorAction, stack: &mut Vec<Types>, info: &OperationDataInfo) -> TypeCheckError;
     fn as_any(&self) -> &dyn Any;
 }
 
-fn map_or_error_desc_type(str: &str, is_runtime: bool) -> DescriptorType {
+fn map_or_error_desc_type(str: &str, is_runtime: bool, info: &OperationDataInfo) -> DescriptorType {
     if DESCRIPTORS_MAP.contains_key(str) {
         *DESCRIPTORS_MAP.get(str).unwrap()
     } else {
         let error_fn = if is_runtime { runtime_error } else { compiler_error };
-        error_fn(format!("The descriptor {} is not registered", str), Position::default());
+        error_fn(format!("The descriptor {} is not registered", str), info);
         unreachable!()
     }
 }
 
-fn map_or_error_desc_action(str: &str, is_runtime: bool) -> DescriptorAction {
+fn map_or_error_desc_action(str: &str, is_runtime: bool, info: &OperationDataInfo) -> DescriptorAction {
     if DESCRIPTOR_ACTION_MAP.contains_key(str) {
         *DESCRIPTOR_ACTION_MAP.get(str).unwrap()
     } else {
         let error_fn = if is_runtime { runtime_error } else { compiler_error };
-        error_fn(format!("The action {} is not registered", str), Position::default());
+        error_fn(format!("The action {} is not registered", str), info);
         unreachable!()
     }
 }
@@ -159,19 +159,19 @@ SD      | Readline 4
 
 pub fn execute_fn() -> Box<dyn Fn(&OperationData, &mut VM)> {
     Box::new(|op_data, vm| {
-        if let OperationType::Descriptor = op_data.0 {
-            if let Operand::DescriptorAction(descr, action) = op_data.clone().2.unwrap() {
-                let typ = map_or_error_desc_type(&descr, true);
-                let action = map_or_error_desc_action(&action, true);
+        if let OperationType::Descriptor = op_data.typ {
+            if let Operand::DescriptorAction(descr, action) = op_data.clone().operand.unwrap() {
+                let typ = map_or_error_desc_type(&descr, true, &op_data.data);
+                let action = map_or_error_desc_action(&action, true, &op_data.data);
 
                 if action == DescriptorAction::Close {
-                    runtime_warning_str("Closing descriptor is not allowed via a descriptor action", op_data.1.location().clone());
+                    runtime_warning_str("Closing descriptor is not allowed via a descriptor action", &op_data.data);
                 }
 
 
                 if action == DescriptorAction::Open {
                     let mut descr: Box<dyn Descriptor> = get_descriptor_from_type(typ);
-                    descr.action(DescriptorAction::Open, vm.stack_mut());
+                    descr.action(DescriptorAction::Open, vm.stack_mut(), &op_data.data);
                     vm.stack_mut().push(RegisterType::Descriptor(Rc::new(Mutex::new(descr))))
                 } else {
                     let stack = vm.stack_mut();
@@ -193,7 +193,7 @@ pub fn execute_fn() -> Box<dyn Fn(&OperationData, &mut VM)> {
                             let mut lock = descr.lock();
                             let lock = lock.as_mut().unwrap();
                             stack.extend(tmp_stack);
-                            lock.action(action, stack);
+                            lock.action(action, stack, &op_data.data);
                             stack.push(RegisterType::Descriptor(push));
                         }
                     }
@@ -206,10 +206,10 @@ pub fn execute_fn() -> Box<dyn Fn(&OperationData, &mut VM)> {
 
 pub fn type_check_fn() -> Box<dyn Fn(&OperationData, &HashMap<String, Function>, &mut Vec<Types>, bool) -> TypeCheckError> {
     Box::new(|op_data, fns, stack, compile_time| {
-        if let OperationType::Descriptor = op_data.0 {
-            if let Operand::DescriptorAction(descr, action) = op_data.clone().2.unwrap() {
-                let typ = map_or_error_desc_type(&descr, true);
-                let action = map_or_error_desc_action(&action, true);
+        if let OperationType::Descriptor = op_data.typ {
+            if let Operand::DescriptorAction(descr, action) = op_data.clone().operand.unwrap() {
+                let typ = map_or_error_desc_type(&descr, true, &op_data.data);
+                let action = map_or_error_desc_action(&action, true, &op_data.data);
 
                 if stack.len() == 0 {
                     ErrorTypes::TooFewElements.into()
@@ -217,7 +217,7 @@ pub fn type_check_fn() -> Box<dyn Fn(&OperationData, &HashMap<String, Function>,
                     let res = match action {
                         DescriptorAction::Open => {
                             let descr = get_descriptor_from_type(typ);
-                            let success = descr.typecheck(DescriptorAction::Open, stack);
+                            let success = descr.typecheck(DescriptorAction::Open, stack, &op_data.data);
                             stack.push(Types::Descriptor);
                             success
                         }
@@ -227,7 +227,7 @@ pub fn type_check_fn() -> Box<dyn Fn(&OperationData, &HashMap<String, Function>,
                         }
                         _ => {
                             let descr = get_descriptor_from_type(typ);
-                            descr.typecheck(action, stack)
+                            descr.typecheck(action, stack, &op_data.data)
                         }
                     };
 
