@@ -28,9 +28,19 @@ If the binary size is unsatifying run ``cargo build --profile=release-opt``
 - [ ] Included libraries (e.g. processes, io etc.)
 - [ ] Speed up parsing
 - [ ] Compiling to byte code and running
+
 ### Maybe
+
 - [ ] Compile to ELF
 - [ ] Self-hosted
+
+## Create your own Stackyy program:
+
+To create your own Stackyy program you need:
+
+1. A working Stackyy binary (see Building for release)
+2. A path to put your projects into
+3. To run ``./stacky new --name [your project name] --path [your project path]``
 
 ## Example programs:
 
