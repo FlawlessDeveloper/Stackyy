@@ -46,5 +46,7 @@ pub enum Action {
     /// Interpret the byte code
     Interpret,
     /// Dump the metadata of the program
-    Info,
+    Info(Info),
+    /// Create a new stackyy program
+    New(New),
 }

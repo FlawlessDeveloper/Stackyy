@@ -104,5 +104,56 @@ fn main() {
                 content
             };
         }
+        Action::New(new_options) => {
+            let root_path = new_options.path.clone();
+            let root_path = PathBuf::from(root_path);
+            let mut pkg_root = root_path.clone();
+            pkg_root.push(format!("{}-scy", new_options.name.clone()));
+
+            if fs::try_exists(&pkg_root).unwrap() {
+                let mut buf = String::new();
+                print!("Do you want to delete the folder {:?} [Yes/Y/yes/y]: ", &pkg_root);
+                stdout().flush();
+                stdin().read_line(&mut buf).expect("input");
+                const AFFIRMATIVES: [&'static str; 4] = ["Yes", "Y", "yes", "y"];
+                if AFFIRMATIVES.contains(&buf.trim()) {
+                    fs::remove_dir_all(&pkg_root).expect("directory to be deleted");
+                } else {
+                    panic!("Could not create project");
+                }
+            }
+
+            let create = fs::create_dir(&pkg_root);
+            if create.is_err() {
+                panic!("Could not create directory")
+            }
+
+            let mut meta_path = pkg_root.clone();
+            meta_path.push(format!("{}-meta.scy.yml", new_options.name.clone()));
+
+            let example_meta = ProgramMetadata {
+                name: new_options.name.clone(),
+                version: "1.0".to_string(),
+                author: None,
+            };
+            let file_data = serde_yaml::to_string(&example_meta).expect("metadata to be serialized");
+
+            let mut file = OpenOptions::new().write(true).truncate(true).create(true).open(meta_path).expect("metadata to be written");
+            file.write_all(file_data.as_ref()).expect("Meta to be written");
+
+            let mut main_path = pkg_root.clone();
+            main_path.push(format!("{}-main.scy", new_options.name.clone()));
+
+            let file_data = format!(r#"// Main function for {}
+@main(->int)
+    "Hello {}" println
+    0
+end"#, new_options.name.clone(), new_options.name.clone());
+
+            let mut file = OpenOptions::new().write(true).truncate(true).create(true).open(main_path).expect("source to be written");
+            file.write_all(file_data.as_ref()).expect("source to be written");
+
+            println!("Created project {} successfully", new_options.name.clone());
+        }
     }
 }
