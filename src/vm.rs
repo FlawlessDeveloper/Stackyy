@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::process::exit;
 
+use crate::CompiledProgram;
 use crate::parser::{Function, State};
 use crate::util::{compiler_error_str, runtime_error, runtime_error_str, runtime_warning, runtime_warning_str};
 use crate::util::operation::{Operation, OperationData, OperationDataInfo, OperationType};
@@ -31,6 +32,27 @@ impl From<State> for VM {
     fn from(state: State) -> Self {
         let mut ops = state.get_ops().clone();
         VM::new(ops)
+    }
+}
+
+impl From<CompiledProgram> for VM {
+    fn from(program: CompiledProgram) -> Self {
+        let fncs = program.operations;
+        let fncs = fncs.iter().map(|entry| {
+            let fnc = entry.1;
+            let data = fnc.data.clone();
+            let fnc_ops = fnc.operations.iter().map(|op| {
+                let nop = Operation::from(op.1.clone());
+                (op.0.clone(), nop)
+            }).collect::<Vec<_>>();
+
+            let fnc = Function {
+                data,
+                operations: fnc_ops,
+            };
+            (entry.0.clone(), fnc)
+        }).collect::<HashMap<_, _>>();
+        VM::new(fncs)
     }
 }
 

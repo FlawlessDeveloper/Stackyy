@@ -17,7 +17,7 @@ use clap::Parser;
 use crate::args::{Action, Args};
 use crate::parser::{pre_parse, tokenize};
 use crate::util::{compiler_error, compiler_error_str};
-use crate::util::compile::ProgramMetadata;
+use crate::util::compile::{CompiledProgram, ProgramMetadata};
 use crate::util::operation::OperationDataInfo;
 use crate::util::position::Position;
 use crate::vm::VM;
@@ -162,7 +162,7 @@ fn main() {
             println!("Sucessfully compiled file");
         }
         Action::Interpret(interpreter_options) => {
-            let _file_bytes = {
+            let file_bytes = {
                 let file_name = &interpreter_options.file;
                 let file = OpenOptions::new().read(true).open(file_name).map_err(|err| format!("Could not open file {} to read from: {}", file_name, err));
 
@@ -183,9 +183,18 @@ fn main() {
                 }
                 content
             };
+
+            let compiled_program = bincode::deserialize::<CompiledProgram>(&file_bytes);
+            if compiled_program.is_err() {
+                compiler_error(format!("Could not program from file. {}", compiled_program.err().unwrap()), &OperationDataInfo::None);
+            }
+
+            let compiled_program = compiled_program.unwrap();
+            let mut vm = VM::from(compiled_program);
+            vm.run();
         }
         Action::Info(info_options) => {
-            let _file_bytes = {
+            let file_bytes = {
                 let file_name = &info_options.file;
                 let file = OpenOptions::new().read(true).open(file_name).map_err(|err| format!("Could not open file {} to read from: {}", file_name, err));
 
@@ -206,6 +215,32 @@ fn main() {
                 }
                 content
             };
+
+            let compiled_program = bincode::deserialize::<CompiledProgram>(&file_bytes);
+            if compiled_program.is_err() {
+                compiler_error(format!("Could not program from file. {}", compiled_program.err().unwrap()), &OperationDataInfo::None);
+            }
+
+            let compiled_program = compiled_program.unwrap();
+
+            let meta = compiled_program.data.clone();
+
+            println!("Program name: {}", meta.name);
+            println!("Program version: {}", meta.version);
+            println!("Program author: {}", meta.author.as_ref().unwrap_or(&"Unknown".to_string()));
+            println!("Program description: {}", meta.description.as_ref().unwrap_or(&"Unknown".to_string()));
+
+            if info_options.extract_path.is_some() {
+                let extract_path = info_options.extract_path.unwrap();
+                let extract_path = PathBuf::from(extract_path);
+                let mut file = OpenOptions::new().write(true).truncate(true).create(true).open(extract_path);
+                if file.is_err() {
+                    compiler_error_str("Could not open file", &OperationDataInfo::None);
+                }
+
+                let deserialized_meta = serde_yaml::to_string(&meta).unwrap();
+                file.unwrap().write_all(deserialized_meta.as_ref()).expect("file to be written");
+            }
         }
         Action::New(new_options) => {
             let root_path = new_options.path.clone();
@@ -238,6 +273,7 @@ fn main() {
                 name: new_options.name.clone(),
                 version: "1.0".to_string(),
                 author: None,
+                description: None
             };
             let file_data = serde_yaml::to_string(&example_meta).expect("metadata to be serialized");
 
